@@ -1,12 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <defs>
-    <linearGradient id="ocean" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#0ea5e9"/>
-      <stop offset="100%" style="stop-color:#0369a1"/>
-    </linearGradient>
-  </defs>
-  <circle cx="50" cy="50" r="45" fill="url(#ocean)"/>
-  <path d="M20 50 Q35 40 50 50 T80 50" stroke="#38bdf8" stroke-width="4" fill="none"/>
-  <path d="M20 60 Q35 50 50 60 T80 60" stroke="#7dd3fc" stroke-width="3" fill="none"/>
-  <path d="M50 25 L55 40 L50 35 L45 40 Z" fill="#f0fdfa"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Main sail -->
+  <path d="M50 18 L50 62 L28 62 Z" fill="white" fill-opacity="0.92"/>
+  <!-- Second sail -->
+  <path d="M53 26 L53 60 L72 60 Z" fill="white" fill-opacity="0.75"/>
+  <!-- Small front sail -->
+  <path d="M27 48 L27 62 L18 62 Z" fill="white" fill-opacity="0.6"/>
+  <!-- Hull -->
+  <path d="M16 63 Q50 70 84 63 L80 67 Q50 75 20 67 Z" fill="#7ec8e3"/>
+  <!-- Wave 1 -->
+  <path d="M12 74 Q27 69 42 74 Q57 79 72 74 Q80 71 88 74" stroke="#7ec8e3" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+  <!-- Wave 2 -->
+  <path d="M18 83 Q33 78 48 83 Q63 88 78 83" stroke="#5bb5d5" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <!-- Wave 3 -->
+  <path d="M28 91 Q40 87 52 91 Q62 94 70 91" stroke="#4aa8cc" stroke-width="3" stroke-linecap="round" fill="none"/>
 </svg>
