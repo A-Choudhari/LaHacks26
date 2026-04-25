@@ -460,3 +460,318 @@ button:disabled {
   color: var(--text);
   margin-top: 0.25rem;
 }
+
+/* ── Mode selector ────────────────────────────────────── */
+
+header {
+  justify-content: space-between;
+}
+
+.mode-selector {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.mode-btn {
+  width: auto;
+  padding: 0.4rem 1rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.8rem;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.mode-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  opacity: 1;
+}
+
+.mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-dark);
+  font-weight: 600;
+}
+
+/* ── Shared mode layout ───────────────────────────────── */
+
+.mode-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Mode 1: Global Intelligence ─────────────────────── */
+
+.mode-desc {
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.zone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.zone-card {
+  padding: 0.75rem;
+  border-radius: 4px;
+  background: var(--bg-panel);
+  border-left: 3px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.zone-card:hover { border-color: var(--accent); }
+.zone-card.zone-high { border-left-color: var(--success); }
+.zone-card.zone-med  { border-left-color: var(--warning); }
+.zone-card.zone-low  { border-left-color: var(--danger); }
+
+.zone-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 0.2rem;
+}
+
+.zone-score {
+  font-size: 0.7rem;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+
+.zone-reason {
+  font-size: 0.7rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.calcofi-summary {
+  padding: 0.75rem;
+  background: var(--bg-panel);
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.calcofi-summary h4 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
+}
+
+.calcofi-summary p {
+  font-size: 0.78rem;
+  color: var(--text);
+  margin-bottom: 0.2rem;
+}
+
+.zone-tooltip {
+  position: absolute;
+  top: 4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  z-index: 20;
+  max-width: 300px;
+  font-size: 0.8rem;
+}
+
+.zone-tooltip strong {
+  display: block;
+  color: var(--text-bright);
+  margin-bottom: 0.4rem;
+}
+
+.zone-tooltip p {
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.zone-tooltip-close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  width: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.swatch-circle {
+  border-radius: 50%;
+}
+
+/* ── Mode 3: Route Planning ───────────────────────────── */
+
+.route-stats {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.segment-list {
+  margin-top: 1rem;
+}
+
+.segment-list h4 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.segment-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-panel);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+  color: var(--text);
+}
+
+.seg-co2 { color: var(--success); font-weight: 600; }
+
+.segment-total {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text);
+  text-align: right;
+}
+
+.segment-total strong { color: var(--accent); }
+
+.waypoint-marker {
+  width: 22px;
+  height: 22px;
+  background: var(--accent);
+  color: var(--bg-dark);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.traffic-panel {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.traffic-panel h4 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--warning);
+  margin-bottom: 0.5rem;
+}
+
+.traffic-card {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+}
+
+.traffic-name { color: var(--text-bright); }
+.traffic-type { color: var(--text); }
+.traffic-speed { color: var(--warning); }
+
+.traffic-marker {
+  color: var(--warning);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transform: rotate(0deg);
+  transition: transform 0.2s;
+}
+
+/* ── MRV badge ────────────────────────────────────────── */
+
+.mrv-card {
+  border: 1px solid var(--success);
+}
+
+.mrv-value {
+  color: var(--success) !important;
+  font-size: 1rem !important;
+}
+
+/* ── Discovery Mode markers ──────────────────────────── */
+
+.discovery-results {
+  margin-top: 0.75rem;
+}
+
+.discovery-marker {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--disc-color, #22c55e);
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  animation: disc-pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 12px var(--disc-color, #22c55e);
+}
+
+.disc-inner {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--disc-color, #22c55e);
+}
+
+@keyframes disc-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 8px var(--disc-color, #22c55e); }
+  50%       { transform: scale(1.2); box-shadow: 0 0 20px var(--disc-color, #22c55e); }
+}
+
+/* ── Three.js 3D layer indicator ─────────────────────── */
+
+.threejs-badge {
+  position: absolute;
+  bottom: 2rem;
+  right: 1rem;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.65rem;
+  color: var(--accent);
+  z-index: 10;
+  pointer-events: none;
+}

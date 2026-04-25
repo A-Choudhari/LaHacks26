@@ -4,6 +4,7 @@ OAE Simulation Platform
 """
 
 import json
+import hashlib
 import subprocess
 import tempfile
 import asyncio
@@ -14,6 +15,24 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# ADK agents (imported lazily to avoid startup crash if deps are broken)
+_spatial_agent = None
+_geochemist_agent = None
+
+def _get_spatial_agent():
+    global _spatial_agent
+    if _spatial_agent is None:
+        from agents.spatial_intelligence import SpatialIntelligenceAgent
+        _spatial_agent = SpatialIntelligenceAgent()
+    return _spatial_agent
+
+def _get_geochemist_agent():
+    global _geochemist_agent
+    if _geochemist_agent is None:
+        from agents.geochemist import GeochemistAgent
+        _geochemist_agent = GeochemistAgent()
+    return _geochemist_agent
 
 app = FastAPI(
     title="The Tiered Edge Fleet",
@@ -88,6 +107,7 @@ class SimulationResult(BaseModel):
     params: dict
     timestamp: str
     source: str  # "live" or "mock"
+    mrv_hash: Optional[str] = None  # SHA-256 tamper-evident MRV proof
 
 
 class HealthResponse(BaseModel):
@@ -95,6 +115,34 @@ class HealthResponse(BaseModel):
     julia_available: bool
     mock_data_available: bool
     ollama_available: bool
+
+
+def compute_mrv_hash(result: "SimulationResult") -> str:
+    """Compute SHA-256 hash of simulation result for tamper-evident MRV logging."""
+    record = {
+        "timestamp": result.timestamp,
+        "status": result.status,
+        "max_aragonite": result.summary.get("max_aragonite_saturation"),
+        "max_alkalinity": result.summary.get("max_total_alkalinity"),
+        "params": result.params,
+        "source": result.source,
+    }
+    digest = hashlib.sha256(
+        json.dumps(record, sort_keys=True).encode()
+    ).hexdigest()
+
+    log_entry = {
+        "timestamp": result.timestamp,
+        "hash": digest,
+        "verdict": result.status,
+        "params_summary": result.params,
+    }
+    log_file = PROJECT_ROOT / "data" / "mrv_log.jsonl"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_file, "a") as f:
+        f.write(json.dumps(log_entry) + "\n")
+
+    return digest
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -249,9 +297,8 @@ async def run_simulation(request: SimulationRequest):
     timestamp = datetime.utcnow().isoformat() + "Z"
 
     if USE_MOCK:
-        # Use mock/pre-computed data
         data = load_mock_data()
-        return SimulationResult(
+        result = SimulationResult(
             status=data["status"],
             safety_failures=data["safety_failures"],
             coordinates=data["coordinates"],
@@ -261,20 +308,21 @@ async def run_simulation(request: SimulationRequest):
             timestamp=timestamp,
             source="mock"
         )
+    else:
+        data = await run_julia_simulation(request)
+        result = SimulationResult(
+            status=data["status"],
+            safety_failures=data["safety_failures"],
+            coordinates=data["coordinates"],
+            fields=data["fields"],
+            summary=data["summary"],
+            params=data["params"],
+            timestamp=timestamp,
+            source="live"
+        )
 
-    # Run live Julia simulation
-    data = await run_julia_simulation(request)
-
-    return SimulationResult(
-        status=data["status"],
-        safety_failures=data["safety_failures"],
-        coordinates=data["coordinates"],
-        fields=data["fields"],
-        summary=data["summary"],
-        params=data["params"],
-        timestamp=timestamp,
-        source="live"
-    )
+    result.mrv_hash = compute_mrv_hash(result)
+    return result
 
 
 # Fleet status endpoint for Arista "Connect the Dots" challenge
@@ -396,91 +444,239 @@ async def query_ollama(prompt: str, model: str = "gemma4:e4b") -> str:
 @app.post("/analyze", response_model=AnalysisResponse)
 async def analyze_simulation(request: AnalysisRequest):
     """
-    AI-powered analysis of simulation results using Gemma 2
+    AI-powered analysis of simulation results.
 
-    Provides:
-    - Safety assessment with threshold checking
-    - CO2 removal projection
-    - Deployment recommendations
+    Routes through the Geochemist ADK agent (Gemini 2.0 Flash) when
+    GOOGLE_API_KEY is set, then falls back to Ollama/Gemma4, then
+    falls back to rule-based logic — all returning the same shape.
     """
     sim = request.simulation_result
     summary = sim.get("summary", {})
     params = sim.get("params", {})
 
-    # Extract values for prompts
     max_aragonite = summary.get("max_aragonite_saturation", 0)
     max_alkalinity = summary.get("max_total_alkalinity", 0)
     feedstock = params.get("feedstock_type", "olivine")
     temp = params.get("temperature", 15)
-    discharge = params.get("discharge_rate", 0.1)
 
-    # Check Ollama availability
+    # Try ADK Geochemist agent first
+    try:
+        agent = _get_geochemist_agent()
+        result = await agent.run(
+            max_aragonite=max_aragonite,
+            max_alkalinity=max_alkalinity,
+            temperature=temp,
+            feedstock=feedstock,
+            area_km2=25.0,
+        )
+        return AnalysisResponse(
+            safety_assessment=result["safety_assessment"],
+            co2_projection=result["co2_projection"],
+            recommendations=result["recommendations"],
+            confidence=result.get("confidence", 0.85),
+            model_used=result.get("model_used", "geochemist-agent"),
+        )
+    except Exception as e:
+        pass  # fall through to Ollama
+
+    # Ollama / Gemma4 fallback
     ollama_available = False
     try:
         import httpx
         async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.get("http://localhost:11434/api/tags")
             ollama_available = resp.status_code == 200
-    except:
+    except Exception:
         pass
 
     if ollama_available:
-        # Generate AI analysis
         safety_prompt = SAFETY_PROMPT.format(
             max_aragonite=max_aragonite,
             max_alkalinity=max_alkalinity,
             feedstock_type=feedstock,
             temperature=temp,
-            discharge_rate=discharge
+            discharge_rate=params.get("discharge_rate", 0.1),
         )
-
         co2_prompt = CO2_PROMPT.format(
             alkalinity_deployed=max_alkalinity,
             temperature=temp,
-            area=25  # Estimated km²
+            area=25,
+        )
+        safety_text, co2_text = await asyncio.gather(
+            query_ollama(safety_prompt),
+            query_ollama(co2_prompt),
+        )
+        recommendations = []
+        if max_aragonite > 25:
+            recommendations.append("Consider reducing discharge rate to lower aragonite saturation")
+        if max_alkalinity > 3200:
+            recommendations.append("Monitor for olivine toxicity effects on marine life")
+        if not recommendations:
+            recommendations.append("Deployment parameters are within optimal ranges")
+        return AnalysisResponse(
+            safety_assessment=safety_text,
+            co2_projection=co2_text,
+            recommendations=recommendations,
+            confidence=0.85,
+            model_used="gemma4:e4b",
         )
 
-        # Run both queries in parallel
-        safety_task = query_ollama(safety_prompt)
-        co2_task = query_ollama(co2_prompt)
-
-        safety_text, co2_text = await asyncio.gather(safety_task, co2_task)
-        model_used = "gemma4:e4b"
-    else:
-        # Fallback to rule-based analysis
-        is_safe = max_aragonite <= 30.0 and max_alkalinity <= 3500
-        safety_text = (
-            f"Deployment is {'SAFE' if is_safe else 'UNSAFE'}. "
-            f"Aragonite saturation: {max_aragonite:.1f} (threshold: 30.0). "
-            f"Total alkalinity: {max_alkalinity:.0f} µmol/kg (threshold: 3500)."
-        )
-
-        # Simple CO2 projection: ~0.8 mol CO2 per mol TA, 44g/mol CO2
-        co2_tons = (max_alkalinity - 2300) * 0.8 * 44 * 25 * 1e6 / 1e12  # rough estimate
-        co2_text = (
-            f"Projected CO2 removal: {co2_tons:.1f} tons over 10 years. "
-            f"Based on {feedstock} dissolution at {temp}°C with standard OAE efficiency."
-        )
-        model_used = "rule-based-fallback"
-
-    # Generate recommendations
-    recommendations = []
-    if max_aragonite > 25:
-        recommendations.append("Consider reducing discharge rate to lower aragonite saturation")
-    if max_alkalinity > 3200:
-        recommendations.append("Monitor for olivine toxicity effects on marine life")
-    if temp > 25:
-        recommendations.append("High temperature may accelerate dissolution but reduce CO2 solubility")
-    if not recommendations:
-        recommendations.append("Deployment parameters are within optimal ranges")
-
-    return AnalysisResponse(
-        safety_assessment=safety_text,
-        co2_projection=co2_text,
-        recommendations=recommendations,
-        confidence=0.85 if ollama_available else 0.70,
-        model_used=model_used
+    # Pure rule-based fallback
+    from agents.geochemist import (
+        check_aragonite_threshold,
+        check_alkalinity_threshold,
+        project_co2_removal,
+        _build_response,
     )
+    arag_r = check_aragonite_threshold(max_aragonite)
+    alk_r = check_alkalinity_threshold(max_alkalinity)
+    co2_r = project_co2_removal(max_alkalinity, temp, 25.0)
+    result = _build_response(arag_r, alk_r, co2_r, feedstock)
+    return AnalysisResponse(
+        safety_assessment=result["safety_assessment"],
+        co2_projection=result["co2_projection"],
+        recommendations=result["recommendations"],
+        confidence=result.get("confidence", 0.70),
+        model_used="rule-based-fallback",
+    )
+
+
+# ── Generic agent dispatcher ──────────────────────────────────────────────────
+
+class AgentRequest(BaseModel):
+    agent_type: str = Field(..., pattern="^(spatial|geochemist)$")
+    payload: dict
+
+
+class AgentResponse(BaseModel):
+    agent_type: str
+    result: dict
+    model_used: str
+
+
+@app.post("/agent", response_model=AgentResponse)
+async def run_agent(request: AgentRequest):
+    """
+    Route a request to the named ADK agent.
+    agent_type = "spatial"    → SpatialIntelligenceAgent
+    agent_type = "geochemist" → GeochemistAgent
+    """
+    if request.agent_type == "spatial":
+        agent = _get_spatial_agent()
+        lat = request.payload.get("lat", 34.05)
+        lon = request.payload.get("lon", -118.24)
+        radius = request.payload.get("radius_km", 25.0)
+        result = await agent.run(lat=lat, lon=lon, radius_km=radius)
+        return AgentResponse(
+            agent_type="spatial",
+            result=result,
+            model_used=result.get("model_used", "unknown"),
+        )
+
+    if request.agent_type == "geochemist":
+        agent = _get_geochemist_agent()
+        p = request.payload
+        result = await agent.run(
+            max_aragonite=p.get("max_aragonite", 0),
+            max_alkalinity=p.get("max_alkalinity", 2300),
+            temperature=p.get("temperature", 15),
+            feedstock=p.get("feedstock", "olivine"),
+            area_km2=p.get("area_km2", 25.0),
+        )
+        return AgentResponse(
+            agent_type="geochemist",
+            result=result,
+            model_used=result.get("model_used", "unknown"),
+        )
+
+    raise HTTPException(status_code=400, detail=f"Unknown agent_type: {request.agent_type}")
+
+
+# ── Discovery Mode ────────────────────────────────────────────────────────────
+
+class DiscoveryZone(BaseModel):
+    lat: float
+    lon: float
+    score: float
+    reason: str
+    mpa_conflict: bool
+
+
+@app.post("/discover", response_model=list[DiscoveryZone])
+async def discover_zones():
+    """
+    AI-recommended OAE deployment zones.
+
+    The Spatial Intelligence agent evaluates candidate sites from the
+    CalCOFI grid and returns the top sites ranked by suitability.
+    """
+    # Candidate sites drawn from CalCOFI station positions
+    candidates = [
+        (36.47, -122.44), (35.21, -122.09), (34.02, -121.50),
+        (34.97, -121.55), (33.78, -120.95), (32.82, -120.91),
+        (31.62, -120.32), (30.42, -119.73),
+    ]
+
+    agent = _get_spatial_agent()
+    tasks = [agent.run(lat=lat, lon=lon, radius_km=30.0) for lat, lon in candidates]
+    results = await asyncio.gather(*tasks)
+
+    zones: list[DiscoveryZone] = []
+    for (lat, lon), r in zip(candidates, results):
+        zones.append(DiscoveryZone(
+            lat=lat,
+            lon=lon,
+            score=r.get("suitability_score", 0.5),
+            reason=r.get("reason", ""),
+            mpa_conflict=r.get("mpa_conflict", False),
+        ))
+
+    # Return top 5 by score, filter out MPA conflicts
+    zones.sort(key=lambda z: z.score, reverse=True)
+    return [z for z in zones if not z.mpa_conflict][:5]
+
+
+@app.get("/oceanographic")
+async def get_oceanographic_data():
+    """
+    CalCOFI-style oceanographic station data for Mode 1 Global Intelligence.
+    Loads from mock file; in production would query calcofi.io/api.
+    """
+    mock_file = MOCK_DATA_DIR / "calcofi_stations.json"
+    if mock_file.exists():
+        with open(mock_file) as f:
+            return json.load(f)
+    return []
+
+
+class VesselTraffic(BaseModel):
+    vessel_id: str
+    name: str
+    vessel_type: str
+    lat: float
+    lon: float
+    heading: float
+    speed_kn: float
+
+
+@app.get("/traffic", response_model=list[VesselTraffic])
+async def get_vessel_traffic():
+    """
+    Mock AIS vessel traffic near the OAE deployment zone.
+    Used in Route Planning mode to show conflict avoidance.
+    """
+    return [
+        VesselTraffic(vessel_id="ais-001", name="Ever Given II", vessel_type="container",
+                      lat=34.12, lon=-119.05, heading=112.0, speed_kn=14.2),
+        VesselTraffic(vessel_id="ais-002", name="Nordic Spirit", vessel_type="tanker",
+                      lat=33.65, lon=-118.80, heading=285.0, speed_kn=11.8),
+        VesselTraffic(vessel_id="ais-003", name="Pacific Pioneer", vessel_type="bulk_carrier",
+                      lat=34.25, lon=-118.50, heading=200.0, speed_kn=9.5),
+        VesselTraffic(vessel_id="ais-004", name="Sea Hawk", vessel_type="fishing",
+                      lat=33.90, lon=-119.30, heading=045.0, speed_kn=6.1),
+        VesselTraffic(vessel_id="ais-005", name="Catalina Express", vessel_type="ferry",
+                      lat=33.75, lon=-118.35, heading=230.0, speed_kn=22.0),
+    ]
 
 
 if __name__ == "__main__":
