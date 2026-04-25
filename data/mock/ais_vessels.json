@@ -1,0 +1,137 @@
+[
+  {
+    "vessel_id": "ais-001",
+    "name": "Ever Forward",
+    "vessel_type": "container",
+    "lat": 33.72,
+    "lon": -118.25,
+    "heading": 315,
+    "speed_kn": 14.5
+  },
+  {
+    "vessel_id": "ais-002",
+    "name": "Maersk Valencia",
+    "vessel_type": "container",
+    "lat": 33.55,
+    "lon": -118.05,
+    "heading": 45,
+    "speed_kn": 12.8
+  },
+  {
+    "vessel_id": "ais-003",
+    "name": "Pacific Voyager",
+    "vessel_type": "tanker",
+    "lat": 33.68,
+    "lon": -118.30,
+    "heading": 270,
+    "speed_kn": 10.2
+  },
+  {
+    "vessel_id": "ais-004",
+    "name": "Nordic Spirit",
+    "vessel_type": "tanker",
+    "lat": 33.82,
+    "lon": -118.45,
+    "heading": 135,
+    "speed_kn": 11.5
+  },
+  {
+    "vessel_id": "ais-005",
+    "name": "Carnival Radiance",
+    "vessel_type": "cruise",
+    "lat": 33.74,
+    "lon": -118.28,
+    "heading": 225,
+    "speed_kn": 18.0
+  },
+  {
+    "vessel_id": "ais-006",
+    "name": "Ruby Princess",
+    "vessel_type": "cruise",
+    "lat": 33.71,
+    "lon": -118.22,
+    "heading": 45,
+    "speed_kn": 16.5
+  },
+  {
+    "vessel_id": "ais-007",
+    "name": "Sea Hawk",
+    "vessel_type": "fishing",
+    "lat": 33.95,
+    "lon": -118.52,
+    "heading": 90,
+    "speed_kn": 6.2
+  },
+  {
+    "vessel_id": "ais-008",
+    "name": "Pacific Angler",
+    "vessel_type": "fishing",
+    "lat": 33.88,
+    "lon": -118.60,
+    "heading": 180,
+    "speed_kn": 5.8
+  },
+  {
+    "vessel_id": "ais-009",
+    "name": "Marlin Hunter",
+    "vessel_type": "fishing",
+    "lat": 34.02,
+    "lon": -118.70,
+    "heading": 270,
+    "speed_kn": 4.5
+  },
+  {
+    "vessel_id": "ais-010",
+    "name": "Harbor Master",
+    "vessel_type": "tug",
+    "lat": 33.76,
+    "lon": -118.27,
+    "heading": 0,
+    "speed_kn": 8.0
+  },
+  {
+    "vessel_id": "ais-011",
+    "name": "Port Guardian",
+    "vessel_type": "tug",
+    "lat": 33.73,
+    "lon": -118.20,
+    "heading": 180,
+    "speed_kn": 7.5
+  },
+  {
+    "vessel_id": "ais-012",
+    "name": "CMA CGM Titan",
+    "vessel_type": "container",
+    "lat": 33.48,
+    "lon": -117.95,
+    "heading": 315,
+    "speed_kn": 15.2
+  },
+  {
+    "vessel_id": "ais-013",
+    "name": "Chevron Legacy",
+    "vessel_type": "tanker",
+    "lat": 33.62,
+    "lon": -118.15,
+    "heading": 90,
+    "speed_kn": 9.8
+  },
+  {
+    "vessel_id": "ais-014",
+    "name": "Catalina Express",
+    "vessel_type": "ferry",
+    "lat": 33.70,
+    "lon": -118.29,
+    "heading": 230,
+    "speed_kn": 22.0
+  },
+  {
+    "vessel_id": "ais-015",
+    "name": "Island Flyer",
+    "vessel_type": "ferry",
+    "lat": 33.44,
+    "lon": -118.48,
+    "heading": 50,
+    "speed_kn": 24.0
+  }
+]
