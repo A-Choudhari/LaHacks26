@@ -12,6 +12,65 @@
 - [x] Map legend for alkalinity heatmap
 - [x] Impact metrics overlay (CO₂ removed, safety status)
 - [x] MPA (Marine Protected Area) overlay on map
+- [x] **phase:ui1** — Full UI overhaul (Framer Motion, Radix Slider, minimal dark theme, custom ship SVG markers, organic MPA blobs, sliding feedstock control, spring animations throughout)
+
+---
+
+## UI Phase 2 — Remaining UI Polish (branch: phase:ui2)
+
+### U1. Mode switcher navigation
+**Priority:** HIGH
+**What:** Top-nav tabs: **Global Intelligence** | **Mission Control** | **Route Planning**. Animated underline indicator that slides between tabs (shared layout Framer Motion). Current layout is Mode 2. Modes 1 and 3 show placeholder panels.
+**Why:** Judges need to see the full product vision — even stubbed modes with the nav frame make it legible
+**Status:** TODO
+
+### U2. Ship marker tooltips on hover
+**Priority:** HIGH
+**What:** On hover over a ship SVG marker on the map, show a floating tooltip with ship name, status, position (lat/lon), and CO₂ removed. Use a `motion.div` that fades in with scale.
+**Why:** The map markers are now visually rich but carry no readable info on hover
+**Status:** TODO
+
+### U3. AI Analysis panel — streaming / typewriter text
+**Priority:** MEDIUM
+**What:** When Gemma returns analysis text, animate it in character-by-character (typewriter effect) using a `useEffect` + `useState` interval. Add a blinking cursor while typing.
+**Why:** Makes the AI feel alive and responsive rather than text popping in all at once
+**Status:** TODO
+
+### U4. Mode 1: Global Intelligence UI
+**Priority:** MEDIUM
+**What:** Full-screen Pacific-centered map view. Candidate OAE deployment zones as glowing polygon overlays. CalCOFI station dots. "Best Zones" highlight panel on right. Consistent design tokens and panel styles from phase:ui1.
+**Depends on:** TODOS #10, U1
+**Status:** TODO
+
+### U5. Mode 3: Route Planning UI
+**Priority:** MEDIUM
+**What:** Click-to-place waypoints on map. Animated route line drawn between them. Per-waypoint sidebar showing projected alkalinity discharge. "Optimize Route" button. Consistent with phase:ui1 design language.
+**Depends on:** TODOS #11, U1
+**Status:** TODO
+
+### U6. Loading skeletons
+**Priority:** MEDIUM
+**What:** While fleet data is loading, show 3 pulsing skeleton ship cards in the right panel. While simulation is running, show a shimmer placeholder in the result area. Use CSS `@keyframes` shimmer (no extra lib needed).
+**Why:** Currently panels either show nothing or snap in — skeletons make the loading state feel intentional
+**Status:** TODO
+
+### U7. Impact metrics — animated number count-up
+**Priority:** LOW
+**What:** When CO₂ numbers change (fleet load, new simulation), animate the value counting up from the previous value using Framer Motion's `useMotionValue` + `animate()`. Duration ~0.6s with easeOut.
+**Why:** Numbers that count up read as live data, not static labels
+**Status:** TODO
+
+### U8. Header system status indicators
+**Priority:** LOW
+**What:** Add small status chips next to "System Online": backend latency (ms), Ollama status (online/offline), data source (live/mock). Poll `/health` every 5s. Each chip fades in/out on status change.
+**Why:** Makes the header feel like mission control monitoring rather than just a title bar
+**Status:** TODO
+
+### U9. Responsive / narrow viewport
+**Priority:** LOW
+**What:** Below 1200px width, collapse sidebars into bottom sheet drawers that slide up on a tab press. Map takes full screen. Uses `AnimatePresence` + `y` spring for the drawer.
+**Why:** Judges may demo on a laptop — the three-panel layout breaks below ~1100px
+**Status:** TODO
 - [x] Mapbox token configured
 - [x] Ollama + Gemma 2 setup
 - [x] Three.js and wire up a canvas layer (`three` + `@types/three` installed; `ThreeLayer.ts` implements `mapboxgl.CustomLayerInterface`)

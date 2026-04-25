@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { QueryClient, QueryClientProvider, useQuery, useMutation } from '@tanstack/react-query'
 import Map, { Source, Layer, Marker, MapRef } from 'react-map-gl'
+import { motion, AnimatePresence } from 'framer-motion'
+import * as SliderPrimitive from '@radix-ui/react-slider'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { PlumeThreeLayer } from './ThreeLayer'
 
@@ -8,7 +10,7 @@ const queryClient = new QueryClient()
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001'
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || ''
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 
 type AppMode = 'global' | 'mission' | 'route'
 
@@ -64,7 +66,23 @@ interface DiscoveryZone {
   mpa_conflict: boolean
 }
 
-// ─── Static GeoJSON data ──────────────────────────────────────────────────────
+// ── Animation variants ─────────────────────────────────────────────────────
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 10 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring' as const, stiffness: 420, damping: 32 }
+  }
+}
+
+const staggerList = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.07 } }
+}
+
+// ── Static GeoJSON data ────────────────────────────────────────────────────
 
 const OAE_ZONES = {
   type: 'FeatureCollection' as const,
@@ -93,23 +111,121 @@ const MPA_DATA = {
     {
       type: 'Feature' as const,
       properties: { name: 'Channel Islands NMS', type: 'sanctuary' },
-      geometry: { type: 'Polygon' as const, coordinates: [[[-119.9,34.15],[-119.9,33.85],[-119.3,33.85],[-119.3,34.15],[-119.9,34.15]]] },
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [[
+          [-120.42, 33.97], [-120.28, 34.14], [-120.05, 34.23],
+          [-119.76, 34.22], [-119.48, 34.16], [-119.18, 34.06],
+          [-119.02, 33.91], [-119.10, 33.74], [-119.36, 33.67],
+          [-119.64, 33.69], [-119.91, 33.75], [-120.18, 33.83],
+          [-120.38, 33.91], [-120.42, 33.97]
+        ]]
+      },
     },
     {
       type: 'Feature' as const,
       properties: { name: 'Point Dume SMCA', type: 'conservation' },
-      geometry: { type: 'Polygon' as const, coordinates: [[[-118.82,34.02],[-118.82,33.98],[-118.75,33.98],[-118.75,34.02],[-118.82,34.02]]] },
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [[
+          [-118.858, 34.013], [-118.832, 34.038],
+          [-118.800, 34.031], [-118.772, 34.010],
+          [-118.765, 33.981], [-118.788, 33.964],
+          [-118.822, 33.961], [-118.848, 33.978],
+          [-118.858, 34.001], [-118.858, 34.013]
+        ]]
+      },
+    },
+    {
+      type: 'Feature' as const,
+      properties: { name: 'Santa Monica Bay CA', type: 'conservation' },
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [[
+          [-118.660, 34.022], [-118.608, 34.058],
+          [-118.548, 34.061], [-118.490, 34.038],
+          [-118.458, 33.995], [-118.476, 33.955],
+          [-118.530, 33.931], [-118.594, 33.928],
+          [-118.645, 33.951], [-118.668, 33.990],
+          [-118.660, 34.022]
+        ]]
+      },
     },
   ],
 }
 
-// ─── Shared sub-components ────────────────────────────────────────────────────
+// ── FeedstockPicker ────────────────────────────────────────────────────────
+
+function FeedstockPicker({ value, onChange }: {
+  value: 'olivine' | 'sodium_hydroxide'
+  onChange: (v: 'olivine' | 'sodium_hydroxide') => void
+}) {
+  return (
+    <div className="param-item">
+      <div className="param-row" style={{ marginBottom: 8 }}>
+        <span className="param-label">Feedstock</span>
+      </div>
+      <div className="segmented">
+        <motion.div
+          className="segmented-track"
+          animate={{ x: value === 'olivine' ? 0 : '100%' }}
+          transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+        />
+        <button
+          className={`segmented-btn ${value === 'olivine' ? 'active' : ''}`}
+          onClick={() => onChange('olivine')}
+        >Olivine</button>
+        <button
+          className={`segmented-btn ${value === 'sodium_hydroxide' ? 'active' : ''}`}
+          onClick={() => onChange('sodium_hydroxide')}
+        >NaOH</button>
+      </div>
+    </div>
+  )
+}
+
+// ── ParamSlider ────────────────────────────────────────────────────────────
+
+function ParamSlider({ label, value, min, max, step, onChange, unit }: {
+  label: string; value: number; min: number; max: number
+  step: number; onChange: (v: number) => void; unit: string
+}) {
+  return (
+    <div className="param-item">
+      <div className="param-row">
+        <span className="param-label">{label}</span>
+        <motion.span
+          key={value}
+          className="param-value"
+          initial={{ scale: 1.18, opacity: 0.55 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 520, damping: 22 }}
+        >
+          {value}<span className="param-unit">{unit}</span>
+        </motion.span>
+      </div>
+      <SliderPrimitive.Root
+        className="slider-root"
+        min={min} max={max} step={step} value={[value]}
+        onValueChange={([v]) => onChange(v)}
+      >
+        <SliderPrimitive.Track className="slider-track">
+          <SliderPrimitive.Range className="slider-range" />
+        </SliderPrimitive.Track>
+        <SliderPrimitive.Thumb className="slider-thumb" aria-label={label} />
+      </SliderPrimitive.Root>
+    </div>
+  )
+}
+
+// ── Shared sub-components ──────────────────────────────────────────────────
 
 function MPAOverlay() {
   return (
     <Source id="mpa" type="geojson" data={MPA_DATA}>
-      <Layer id="mpa-fill" type="fill" paint={{ 'fill-color': '#ef4444', 'fill-opacity': 0.15 }} />
-      <Layer id="mpa-outline" type="line" paint={{ 'line-color': '#ef4444', 'line-width': 2, 'line-dasharray': [3, 2] }} />
+      <Layer id="mpa-glow" type="line" paint={{ 'line-color': '#f87171', 'line-width': 14, 'line-blur': 10, 'line-opacity': 0.12 }} />
+      <Layer id="mpa-fill" type="fill" paint={{ 'fill-color': '#f87171', 'fill-opacity': 0.07 }} />
+      <Layer id="mpa-outline" type="line" paint={{ 'line-color': '#f87171', 'line-width': 1.8, 'line-dasharray': [1.5, 2.5], 'line-opacity': 0.7 }} />
     </Source>
   )
 }
@@ -118,45 +234,52 @@ function PlumeHeatmap({ visible, simulationData }: { visible: boolean; simulatio
   const baseLon = -118.2437
   const baseLat = 34.0522
 
-  const features: any[] = []
-  if (visible) {
+  const features = (() => {
+    if (!visible) return []
     if (simulationData?.fields?.alkalinity) {
       const alk = simulationData.fields.alkalinity
-      const gridSize = alk.length
-      for (let i = 0; i < gridSize; i++) {
-        for (let j = 0; j < (alk[i]?.length || 0); j++) {
-          const intensity = Math.max(0, Math.min(1, ((alk[i][j] ?? 0) - 2300) / 1200))
-          if (intensity > 0.05) {
-            features.push({
-              type: 'Feature' as const,
-              properties: { intensity },
-              geometry: { type: 'Point' as const, coordinates: [baseLon + (j - gridSize / 2) * 0.008, baseLat + (i - gridSize / 2) * 0.004] },
-            })
+      const gs = alk.length
+      return alk.flatMap((row, i) =>
+        row.map((val, j) => {
+          const intensity = Math.max(0, Math.min(1, (val - 2300) / 1200))
+          if (intensity <= 0.05) return null
+          return {
+            type: 'Feature' as const,
+            properties: { intensity },
+            geometry: { type: 'Point' as const, coordinates: [baseLon + (j - gs / 2) * 0.008, baseLat + (i - gs / 2) * 0.004] },
           }
-        }
-      }
-    } else {
-      for (let i = 0; i < 80; i++) {
-        const angle = (i / 80) * Math.PI * 2
-        const distance = Math.random() * 0.04
-        features.push({
-          type: 'Feature' as const,
-          properties: { intensity: Math.exp(-distance * 30) * (0.5 + Math.random() * 0.5) },
-          geometry: { type: 'Point' as const, coordinates: [baseLon + Math.cos(angle) * distance, baseLat + Math.sin(angle) * distance * 0.5] },
-        })
-      }
+        }).filter(Boolean)
+      )
     }
-  }
+    return Array.from({ length: 80 }, (_, i) => {
+      const angle = (i / 80) * Math.PI * 2
+      const dist = Math.random() * 0.04
+      return {
+        type: 'Feature' as const,
+        properties: { intensity: Math.exp(-dist * 30) * (0.5 + Math.random() * 0.5) },
+        geometry: { type: 'Point' as const, coordinates: [baseLon + Math.cos(angle) * dist, baseLat + Math.sin(angle) * dist * 0.5] },
+      }
+    })
+  })()
 
   return (
-    <Source id="plume" type="geojson" data={{ type: 'FeatureCollection', features }}>
+    <Source id="plume" type="geojson" data={{ type: 'FeatureCollection', features: features as any[] }}>
       <Layer
         id="plume-heat"
         type="heatmap"
         paint={{
           'heatmap-weight': ['get', 'intensity'],
           'heatmap-intensity': 1.5,
-          'heatmap-color': ['interpolate',['linear'],['heatmap-density'],0,'rgba(0,0,255,0)',0.1,'rgba(0,100,255,0.3)',0.3,'rgba(0,200,255,0.5)',0.5,'rgba(0,255,200,0.6)',0.7,'rgba(100,255,100,0.7)',0.85,'rgba(255,255,0,0.8)',1,'rgba(255,100,0,0.9)'],
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0, 'rgba(0,0,255,0)',
+            0.1, 'rgba(0,100,255,0.3)',
+            0.3, 'rgba(0,200,255,0.5)',
+            0.5, 'rgba(0,255,200,0.6)',
+            0.7, 'rgba(100,255,100,0.7)',
+            0.85, 'rgba(255,255,0,0.8)',
+            1, 'rgba(255,100,0,0.9)'
+          ],
           'heatmap-radius': 40,
           'heatmap-opacity': 0.85,
         }}
@@ -165,7 +288,7 @@ function PlumeHeatmap({ visible, simulationData }: { visible: boolean; simulatio
   )
 }
 
-// ─── Mode Selector ────────────────────────────────────────────────────────────
+// ── Mode Selector ──────────────────────────────────────────────────────────
 
 function ModeSelector({ mode, onModeChange }: { mode: AppMode; onModeChange: (m: AppMode) => void }) {
   return (
@@ -183,77 +306,90 @@ function ModeSelector({ mode, onModeChange }: { mode: AppMode; onModeChange: (m:
   )
 }
 
-// ─── Mission Control panels ───────────────────────────────────────────────────
+// ── SimulationPanel ────────────────────────────────────────────────────────
 
 function SimulationPanel({ onRun, isLoading, result }: {
-  onRun: (p: SimulationParams) => void
-  isLoading: boolean
-  result?: SimulationResult
+  onRun: (p: SimulationParams) => void; isLoading: boolean; result?: SimulationResult
 }) {
   const [vesselSpeed, setVesselSpeed] = useState(5.0)
-  const [dischargeRate, setDischargeRate] = useState(0.1)
+  const [dischargeRate, setDischargeRate] = useState(0.5)
   const [feedstock, setFeedstock] = useState<'olivine' | 'sodium_hydroxide'>('olivine')
 
   return (
-    <div className="panel simulation-panel">
-      <h2>Mission Control</h2>
-      <div className="param-group">
-        <label>Vessel Speed (m/s)</label>
-        <input type="range" min="1" max="15" step="0.5" value={vesselSpeed} onChange={e => setVesselSpeed(+e.target.value)} />
-        <span>{vesselSpeed}</span>
-      </div>
-      <div className="param-group">
-        <label>Discharge Rate (m³/s)</label>
-        <input type="range" min="0.01" max="1.0" step="0.01" value={dischargeRate} onChange={e => setDischargeRate(+e.target.value)} />
-        <span>{dischargeRate}</span>
-      </div>
-      <div className="param-group">
-        <label>Feedstock</label>
-        <select value={feedstock} onChange={e => setFeedstock(e.target.value as any)}>
-          <option value="olivine">Olivine</option>
-          <option value="sodium_hydroxide">Sodium Hydroxide</option>
-        </select>
-      </div>
-      <button onClick={() => onRun({ vessel: { vessel_speed: vesselSpeed, discharge_rate: dischargeRate }, feedstock: { feedstock_type: feedstock }, ocean: { temperature: 15.0, salinity: 35.0 } })} disabled={isLoading}>
-        {isLoading ? 'Simulating...' : 'Run Simulation'}
-      </button>
-      {result && (
-        <div className={`result ${result.status}`}>
-          <h3>Result: {result.status.toUpperCase()}</h3>
-          <p>Source: {result.source}</p>
-          <p>Max Ω aragonite: {result.summary.max_aragonite_saturation.toFixed(2)}</p>
-          <p>Max TA: {result.summary.max_total_alkalinity.toFixed(0)} µmol/kg</p>
-          {result.safety_failures.length > 0 && (
-            <ul className="failures">{result.safety_failures.map((f, i) => <li key={i}>{f}</li>)}</ul>
-          )}
-        </div>
-      )}
+    <div className="panel">
+      <div className="panel-label">Mission Control</div>
+
+      <ParamSlider
+        label="Vessel Speed" value={vesselSpeed}
+        min={1} max={15} step={0.5} unit="m/s"
+        onChange={setVesselSpeed}
+      />
+      <ParamSlider
+        label="Discharge Rate" value={dischargeRate}
+        min={0.01} max={1.0} step={0.01} unit="m³/s"
+        onChange={setDischargeRate}
+      />
+
+      <FeedstockPicker value={feedstock} onChange={setFeedstock} />
+
+      <motion.button
+        className="run-btn"
+        onClick={() => onRun({
+          vessel: { vessel_speed: vesselSpeed, discharge_rate: dischargeRate },
+          feedstock: { feedstock_type: feedstock },
+          ocean: { temperature: 15.0, salinity: 35.0 }
+        })}
+        disabled={isLoading}
+        whileHover={{ scale: isLoading ? 1 : 1.015 }}
+        whileTap={{ scale: isLoading ? 1 : 0.985 }}
+      >
+        {isLoading ? 'Simulating…' : 'Run Simulation'}
+      </motion.button>
+
+      <AnimatePresence>
+        {result && (
+          <motion.div
+            className={`result-card ${result.status}`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          >
+            <div className="result-header">
+              <div className={`result-dot ${result.status}`} />
+              <span className={`result-title ${result.status}`}>
+                {result.status === 'safe' ? 'Deployment Safe' : 'Threshold Exceeded'}
+              </span>
+            </div>
+            <div className="result-rows">
+              <div className="result-row">
+                <span className="result-row-label">Ω aragonite</span>
+                <span className="result-row-val">{result.summary.max_aragonite_saturation.toFixed(2)}</span>
+              </div>
+              <div className="result-row">
+                <span className="result-row-label">Total alkalinity</span>
+                <span className="result-row-val">{result.summary.max_total_alkalinity.toFixed(0)} µmol/kg</span>
+              </div>
+              <div className="result-row">
+                <span className="result-row-label">Data source</span>
+                <span className="result-row-val">{result.source}</span>
+              </div>
+            </div>
+            {result.safety_failures.length > 0 && (
+              <div className="result-failures">
+                {result.safety_failures.map((f, i) => (
+                  <div key={i} className="failure-item">⚠ {f}</div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-function FleetPanel({ ships }: { ships?: ShipStatus[] }) {
-  if (!ships) return null
-  const totalCO2 = ships.reduce((s, ship) => s + ship.co2_removed_tons, 0)
-  return (
-    <div className="panel fleet-panel">
-      <h2>Fleet Status</h2>
-      <div className="fleet-summary">
-        <div className="metric"><span className="value">{ships.length}</span><span className="label">Ships</span></div>
-        <div className="metric"><span className="value">{totalCO2.toFixed(0)}</span><span className="label">Tons CO₂</span></div>
-      </div>
-      <div className="ship-list">
-        {ships.map(ship => (
-          <div key={ship.ship_id} className={`ship-card ${ship.status}`}>
-            <div className="ship-name">{ship.name}</div>
-            <div className="ship-status">{ship.status}</div>
-            <div className="ship-co2">{ship.co2_removed_tons.toFixed(1)} t CO₂</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
+// ── AIPanel ────────────────────────────────────────────────────────────────
 
 function AIPanel({ result }: { result?: SimulationResult }) {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
@@ -269,93 +405,231 @@ function AIPanel({ result }: { result?: SimulationResult }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          simulation_result: { summary: result.summary, params: { feedstock_type: 'olivine', temperature: 15, discharge_rate: 0.1 } },
+          simulation_result: {
+            summary: result.summary,
+            params: { feedstock_type: 'olivine', temperature: 15, discharge_rate: 0.1 }
+          },
           analysis_type: 'full',
-        }),
+        })
       })
-      if (!res.ok) throw new Error('Analysis failed')
+      if (!res.ok) throw new Error()
       setAnalysis(await res.json())
     } catch {
-      setError('Failed to analyze. Is the backend running?')
+      setError('Analysis failed — is the backend running?')
     } finally {
       setIsAnalyzing(false)
     }
   }
 
   return (
-    <div className="panel ai-panel">
-      <h2>AI Analysis</h2>
-      <button onClick={analyze} disabled={!result || isAnalyzing}>
-        {isAnalyzing ? 'Analyzing...' : 'Analyze Results'}
-      </button>
-      {error && <div className="error">{error}</div>}
-      {analysis && (
-        <div className="analysis">
-          <div className="analysis-section"><h4>Safety Assessment</h4><p>{analysis.safety_assessment}</p></div>
-          <div className="analysis-section"><h4>CO₂ Projection</h4><p>{analysis.co2_projection}</p></div>
-          <div className="analysis-section">
-            <h4>Recommendations</h4>
-            <ul>{analysis.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul>
-          </div>
-          <div className="analysis-meta">Model: {analysis.model_used} | Confidence: {(analysis.confidence * 100).toFixed(0)}%</div>
-        </div>
-      )}
+    <div className="panel">
+      <div className="panel-label">AI Analysis</div>
+      <motion.button
+        className="analyze-btn"
+        onClick={analyze}
+        disabled={!result || isAnalyzing}
+        whileHover={{ scale: (!result || isAnalyzing) ? 1 : 1.01 }}
+        whileTap={{ scale: (!result || isAnalyzing) ? 1 : 0.99 }}
+      >
+        {isAnalyzing ? 'Analyzing with Gemma…' : 'Analyze Results'}
+      </motion.button>
+
+      {error && <div className="error-pill">{error}</div>}
+
+      <AnimatePresence>
+        {analysis && (
+          <motion.div
+            className="analysis-body"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          >
+            <div>
+              <div className="analysis-block-label">Safety</div>
+              <p className="analysis-text">{analysis.safety_assessment}</p>
+            </div>
+            <div>
+              <div className="analysis-block-label">CO₂ Projection</div>
+              <p className="analysis-text">{analysis.co2_projection}</p>
+            </div>
+            <div>
+              <div className="analysis-block-label">Recommendations</div>
+              <ul className="analysis-list">
+                {analysis.recommendations.map((r, i) => <li key={i}>{r}</li>)}
+              </ul>
+            </div>
+            <div className="analysis-footer">
+              <span>{analysis.model_used}</span>
+              <span>{(analysis.confidence * 100).toFixed(0)}% confidence</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-function MapLegend({ visible }: { visible: boolean }) {
+// ── FleetPanel ─────────────────────────────────────────────────────────────
+
+function FleetPanel({ ships }: { ships?: ShipStatus[] }) {
+  if (!ships) return null
+  const totalCO2 = ships.reduce((sum, s) => sum + s.co2_removed_tons, 0)
+
+  return (
+    <div className="panel">
+      <div className="panel-label">Fleet</div>
+
+      <div className="fleet-stats">
+        <div className="stat-card">
+          <div className="stat-value">{ships.length}</div>
+          <div className="stat-label">Ships</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{totalCO2.toFixed(0)}</div>
+          <div className="stat-label">Tons CO₂</div>
+        </div>
+      </div>
+
+      <motion.div className="ship-list" variants={staggerList} initial="hidden" animate="show">
+        {ships.map(ship => (
+          <motion.div key={ship.ship_id} variants={fadeUp} className="ship-card">
+            <div className={`ship-pip ${ship.status}`} />
+            <div className="ship-info">
+              <div className="ship-name">{ship.name}</div>
+              <div className="ship-meta">
+                <span className={`ship-status ${ship.status}`}>{ship.status}</span>
+                <span className="ship-sep">·</span>
+                <span className="ship-co2">{ship.co2_removed_tons.toFixed(1)} t CO₂</span>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Ship Marker SVG ────────────────────────────────────────────────────────
+
+const STATUS_COLORS: Record<string, string> = {
+  active:    '#4ade80',
+  deploying: '#00c8f0',
+  idle:      '#fbbf24',
+}
+
+function ShipMarker({ status }: { status: string }) {
+  const color = STATUS_COLORS[status] ?? '#6b7a8d'
+
+  return (
+    <div className="ship-marker-wrap">
+      {status === 'deploying' && (
+        <div className="ship-pulse-ring" style={{ background: color, width: 28, height: 28 }} />
+      )}
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="13" fill={`${color}18`} stroke={color} strokeWidth="1.3" />
+        <path
+          d="M14 6 C11.5 6 10 8 10 10.5 L10 18.5 C10 20 11.8 21.5 14 21.5 C16.2 21.5 18 20 18 18.5 L18 10.5 C18 8 16.5 6 14 6 Z"
+          fill={color} fillOpacity="0.85"
+        />
+        <rect x="11.5" y="12" width="5" height="4" rx="1" fill="rgba(0,0,0,0.45)" />
+        <line x1="14" y1="6" x2="14" y2="9.5" stroke="white" strokeWidth="1.2" strokeOpacity="0.55" strokeLinecap="round" />
+        <circle cx="10.5" cy="15" r="1" fill="white" fillOpacity="0.35" />
+        <circle cx="17.5" cy="15" r="1" fill="white" fillOpacity="0.35" />
+      </svg>
+    </div>
+  )
+}
+
+// ── Map Legend ─────────────────────────────────────────────────────────────
+
+function MapLegend({ showPlume }: { showPlume: boolean }) {
   return (
     <div className="map-legend">
-      <div className="legend-item"><div className="legend-mpa" /><span>Marine Protected Area</span></div>
-      {visible && (
-        <>
-          <div className="legend-title">Alkalinity (µmol/kg)</div>
-          <div className="legend-bar">
-            <div className="legend-gradient" />
-            <div className="legend-labels"><span>2300</span><span>2900</span><span>3500</span></div>
-          </div>
-        </>
-      )}
+      <div className="legend-row">
+        <div className="legend-swatch" />
+        <span>Marine Protected Area</span>
+      </div>
+      <AnimatePresence>
+        {showPlume && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <div className="legend-rule" />
+            <div className="legend-grad-label">Alkalinity (µmol/kg)</div>
+            <div className="legend-grad-bar" />
+            <div className="legend-ticks">
+              <span>2300</span><span>2900</span><span>3500</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
+
+// ── Impact Metrics ─────────────────────────────────────────────────────────
 
 function ImpactMetrics({ result, fleet }: { result?: SimulationResult; fleet?: ShipStatus[] }) {
-  const totalCO2 = fleet?.reduce((s, ship) => s + ship.co2_removed_tons, 0) || 0
-  const maxAlk = result?.summary?.max_total_alkalinity || 0
-  const isSafe = result?.status === 'safe'
-  const estimatedCO2 = maxAlk > 2300 ? ((maxAlk - 2300) * 0.8 * 44 * 25) / 1e6 : 0
+  const totalCO2 = fleet?.reduce((sum, s) => sum + s.co2_removed_tons, 0) ?? 0
+  const estCO2 = result
+    ? ((result.summary.max_total_alkalinity - 2300) * 0.8 * 44 * 25) / 1e6
+    : 0
 
   return (
-    <div className="impact-metrics">
-      <div className="impact-card">
-        <div className="impact-value">{totalCO2.toFixed(0)}</div>
-        <div className="impact-label">Total CO₂ Removed (t)</div>
+    <div className="impact-overlay">
+      <div className="impact-chip">
+        <div className="impact-val">{totalCO2.toFixed(0)}</div>
+        <div className="impact-lbl">Fleet CO₂ Removed</div>
       </div>
-      {result && (
-        <>
-          <div className="impact-card">
-            <div className={`impact-value ${isSafe ? 'safe' : 'unsafe'}`}>{isSafe ? 'SAFE' : 'UNSAFE'}</div>
-            <div className="impact-label">Deployment Status</div>
-          </div>
-          <div className="impact-card">
-            <div className="impact-value">+{estimatedCO2.toFixed(1)}</div>
-            <div className="impact-label">Est. CO₂ Impact (t)</div>
-          </div>
-          {result.mrv_hash && (
-            <div className="impact-card mrv-card" title={`MRV Hash: ${result.mrv_hash}`}>
-              <div className="impact-value mrv-value">✓ MRV</div>
-              <div className="impact-label">Proof: {result.mrv_hash.slice(0, 8)}…</div>
-            </div>
-          )}
-        </>
-      )}
+      <AnimatePresence>
+        {result && (
+          <>
+            <motion.div
+              className="impact-chip"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            >
+              <div className={`impact-val ${result.status}`}>
+                {result.status === 'safe' ? 'SAFE' : 'UNSAFE'}
+              </div>
+              <div className="impact-lbl">Deployment Status</div>
+            </motion.div>
+            <motion.div
+              className="impact-chip"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28, delay: 0.05 }}
+            >
+              <div className="impact-val">+{Math.max(0, estCO2).toFixed(1)}</div>
+              <div className="impact-lbl">Est. CO₂ Impact (t)</div>
+            </motion.div>
+            {result.mrv_hash && (
+              <motion.div
+                className="impact-chip"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 28, delay: 0.1 }}
+              >
+                <div className="impact-val mrv-value">✓ MRV</div>
+                <div className="impact-lbl">Proof: {result.mrv_hash.slice(0, 8)}…</div>
+              </motion.div>
+            )}
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-// ─── Mode 1: Global Intelligence ─────────────────────────────────────────────
+// ── Mode 1: Global Intelligence ────────────────────────────────────────────
 
 function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
   const { data: stations } = useQuery<CalCOFIStation[]>({
@@ -390,7 +664,7 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
     <div className="mode-layout">
       <div className="sidebar">
         <div className="panel">
-          <h2>Global Intelligence</h2>
+          <div className="panel-label">Global Intelligence</div>
           <p className="mode-desc">Candidate OAE zones ranked by alkalinity uptake potential, MPA avoidance, and mixed-layer depth.</p>
           <div className="zone-list">
             {OAE_ZONES.features.map(f => (
@@ -405,21 +679,36 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
               </div>
             ))}
           </div>
+
           {stations && (
             <div className="calcofi-summary">
-              <h4>CalCOFI Stations ({stations.length})</h4>
+              <div className="analysis-block-label">CalCOFI Stations ({stations.length})</div>
               <p>Avg temp: {(stations.reduce((s, x) => s + x.temperature_c, 0) / stations.length).toFixed(1)}°C</p>
               <p>Avg salinity: {(stations.reduce((s, x) => s + x.salinity_psu, 0) / stations.length).toFixed(2)} PSU</p>
             </div>
           )}
 
-          <div style={{ marginTop: 16 }}>
-            <button onClick={runDiscovery} disabled={isDiscovering} style={{ width: '100%' }}>
-              {isDiscovering ? 'Scanning zones...' : 'Discover Optimal Zones'}
-            </button>
+          <motion.button
+            className="run-btn"
+            style={{ marginTop: 16 }}
+            onClick={runDiscovery}
+            disabled={isDiscovering}
+            whileHover={{ scale: isDiscovering ? 1 : 1.015 }}
+            whileTap={{ scale: isDiscovering ? 1 : 0.985 }}
+          >
+            {isDiscovering ? 'Scanning zones…' : 'Discover Optimal Zones'}
+          </motion.button>
+
+          <AnimatePresence>
             {discoveryZones.length > 0 && (
-              <div className="discovery-results">
-                <h4>AI Recommendations ({discoveryZones.length})</h4>
+              <motion.div
+                className="discovery-results"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+              >
+                <div className="analysis-block-label">AI Recommendations ({discoveryZones.length})</div>
                 {discoveryZones.map((z, i) => (
                   <div key={i} className={`zone-card zone-${z.score > 0.85 ? 'high' : z.score > 0.7 ? 'med' : 'low'}`}>
                     <div className="zone-name">Site #{i + 1}</div>
@@ -427,9 +716,9 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
                     <div className="zone-reason">{z.reason}</div>
                   </div>
                 ))}
-              </div>
+              </motion.div>
             )}
-          </div>
+          </AnimatePresence>
         </div>
       </div>
 
@@ -445,13 +734,11 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
             if (feat) setSelectedZone(feat.properties)
           }}
         >
-          {/* OAE deployment zones */}
           <Source id="oae-zones" type="geojson" data={OAE_ZONES}>
             <Layer id="oae-zones-fill" type="fill" paint={{ 'fill-color': ['interpolate',['linear'],['get','score'],0.0,'#ef4444',0.7,'#f59e0b',0.9,'#22c55e'], 'fill-opacity': 0.25 }} />
             <Layer id="oae-zones-outline" type="line" paint={{ 'line-color': ['interpolate',['linear'],['get','score'],0.0,'#ef4444',0.7,'#f59e0b',0.9,'#22c55e'], 'line-width': 2 }} />
           </Source>
 
-          {/* CalCOFI oceanographic stations */}
           {stations && (
             <Source id="calcofi" type="geojson" data={stationsGeoJSON}>
               <Layer id="calcofi-circles" type="circle" paint={{ 'circle-radius': 6, 'circle-color': ['interpolate',['linear'],['get','temp'],10,'#3b82f6',18,'#f59e0b',25,'#ef4444'], 'circle-opacity': 0.85, 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 }} />
@@ -461,12 +748,11 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
           <MPAOverlay />
 
           {fleet?.map(ship => (
-            <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat}>
-              <div className={`ship-marker ${ship.status}`}>🚢</div>
+            <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat} anchor="center">
+              <ShipMarker status={ship.status} />
             </Marker>
           ))}
 
-          {/* Discovery zone pulse markers */}
           {discoveryZones.map((z, i) => (
             <Marker key={`disc-${i}`} longitude={z.lon} latitude={z.lat}>
               <div
@@ -489,21 +775,24 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
         )}
 
         <div className="map-legend">
-          <div className="legend-title">OAE Zone Suitability</div>
-          <div className="legend-item"><div className="swatch" style={{ background: '#22c55e' }} /><span>High (&gt;85%)</span></div>
-          <div className="legend-item"><div className="swatch" style={{ background: '#f59e0b' }} /><span>Medium (70-85%)</span></div>
-          <div className="legend-item"><div className="swatch" style={{ background: '#ef4444' }} /><span>Low (&lt;70%)</span></div>
-          <div className="legend-item"><div className="legend-mpa" /><span>MPA Boundary</span></div>
-          {stations && <div className="legend-title" style={{ marginTop: 8 }}>CalCOFI (by temp)</div>}
-          {stations && <div className="legend-item"><div className="swatch swatch-circle" style={{ background: '#3b82f6' }} /><span>10°C</span></div>}
-          {stations && <div className="legend-item"><div className="swatch swatch-circle" style={{ background: '#ef4444' }} /><span>25°C</span></div>}
+          <div className="legend-grad-label">OAE Zone Suitability</div>
+          <div className="legend-row"><div className="legend-swatch" style={{ background: '#22c55e' }} /><span>High (&gt;85%)</span></div>
+          <div className="legend-row"><div className="legend-swatch" style={{ background: '#f59e0b' }} /><span>Medium (70–85%)</span></div>
+          <div className="legend-row"><div className="legend-swatch" style={{ background: '#ef4444' }} /><span>Low (&lt;70%)</span></div>
+          <div className="legend-row"><div className="legend-swatch mpa" /><span>MPA Boundary</span></div>
+          {stations && <>
+            <div className="legend-rule" />
+            <div className="legend-grad-label">CalCOFI (by temp)</div>
+            <div className="legend-row"><div className="legend-swatch circle" style={{ background: '#3b82f6' }} /><span>10°C</span></div>
+            <div className="legend-row"><div className="legend-swatch circle" style={{ background: '#ef4444' }} /><span>25°C</span></div>
+          </>}
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Mode 2: Mission Control ──────────────────────────────────────────────────
+// ── Mode 2: Mission Control ────────────────────────────────────────────────
 
 function MissionControlMode({ fleet }: { fleet?: ShipStatus[] }) {
   const [simulationResult, setSimulationResult] = useState<SimulationResult>()
@@ -511,7 +800,7 @@ function MissionControlMode({ fleet }: { fleet?: ShipStatus[] }) {
   const mapRef = useRef<MapRef>(null)
   const threeLayerRef = useRef<PlumeThreeLayer | null>(null)
 
-  const simulateMutation = useMutation({
+  const simulate = useMutation({
     mutationFn: async (params: SimulationParams) => {
       const res = await fetch(`${API_URL}/simulate`, {
         method: 'POST',
@@ -521,14 +810,13 @@ function MissionControlMode({ fleet }: { fleet?: ShipStatus[] }) {
       if (!res.ok) throw new Error('Simulation failed')
       return res.json() as Promise<SimulationResult>
     },
-    onSuccess: data => {
+    onSuccess: (data) => {
       setSimulationResult(data)
       setShowPlume(true)
     },
-    onError: err => alert('Simulation failed: ' + (err as Error).message),
+    onError: () => alert('Simulation failed — is the backend running?'),
   })
 
-  // Add Three.js layer once map loads
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap()
     if (!map) return
@@ -537,7 +825,6 @@ function MissionControlMode({ fleet }: { fleet?: ShipStatus[] }) {
     map.addLayer(layer)
   }, [])
 
-  // Update Three.js layer when new simulation data arrives
   useEffect(() => {
     if (!simulationResult || !threeLayerRef.current) return
     if (simulationResult.fields?.aragonite_saturation && simulationResult.coordinates) {
@@ -553,19 +840,24 @@ function MissionControlMode({ fleet }: { fleet?: ShipStatus[] }) {
 
   return (
     <div className="mode-layout">
-      <div className="sidebar">
+      <motion.div
+        className="sidebar sidebar-left"
+        initial={{ x: -280, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+      >
         <SimulationPanel
-          onRun={p => simulateMutation.mutate(p)}
-          isLoading={simulateMutation.isPending}
+          onRun={(p) => simulate.mutate(p)}
+          isLoading={simulate.isPending}
           result={simulationResult}
         />
         <AIPanel result={simulationResult} />
-      </div>
+      </motion.div>
 
       <div className="map-container">
         <Map
           ref={mapRef}
-          initialViewState={{ longitude: -118.2437, latitude: 34.0522, zoom: 10 }}
+          initialViewState={{ longitude: -119.1, latitude: 33.55, zoom: 8.5 }}
           style={{ width: '100%', height: '100%' }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           mapboxAccessToken={MAPBOX_TOKEN}
@@ -573,24 +865,29 @@ function MissionControlMode({ fleet }: { fleet?: ShipStatus[] }) {
         >
           <MPAOverlay />
           <PlumeHeatmap visible={showPlume} simulationData={simulationResult} />
-          {fleet?.map(ship => (
-            <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat}>
-              <div className={`ship-marker ${ship.status}`}>🚢</div>
+          {fleet?.map((ship) => (
+            <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat} anchor="center">
+              <ShipMarker status={ship.status} />
             </Marker>
           ))}
         </Map>
-        <MapLegend visible={showPlume} />
+        <MapLegend showPlume={showPlume} />
         <ImpactMetrics result={simulationResult} fleet={fleet} />
       </div>
 
-      <div className="sidebar right">
+      <motion.div
+        className="sidebar sidebar-right"
+        initial={{ x: 280, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+      >
         <FleetPanel ships={fleet} />
-      </div>
+      </motion.div>
     </div>
   )
 }
 
-// ─── Mode 3: Route Planning ───────────────────────────────────────────────────
+// ── Mode 3: Route Planning ─────────────────────────────────────────────────
 
 function RoutePlanningMode({ fleet }: { fleet?: ShipStatus[] }) {
   const [waypoints, setWaypoints] = useState<{ lat: number; lon: number }[]>([])
@@ -613,7 +910,10 @@ function RoutePlanningMode({ fleet }: { fleet?: ShipStatus[] }) {
   const routeKm = waypoints.length >= 2
     ? waypoints.slice(1).reduce((total, wp, i) => {
         const prev = waypoints[i]
-        const d = Math.sqrt(((wp.lat - prev.lat) * 111.32) ** 2 + ((wp.lon - prev.lon) * 111.32 * Math.cos(prev.lat * Math.PI / 180)) ** 2)
+        const d = Math.sqrt(
+          ((wp.lat - prev.lat) * 111.32) ** 2 +
+          ((wp.lon - prev.lon) * 111.32 * Math.cos(prev.lat * Math.PI / 180)) ** 2
+        )
         return total + d
       }, 0)
     : 0
@@ -622,42 +922,71 @@ function RoutePlanningMode({ fleet }: { fleet?: ShipStatus[] }) {
     <div className="mode-layout">
       <div className="sidebar">
         <div className="panel">
-          <h2>Route Planning</h2>
+          <div className="panel-label">Route Planning</div>
           <p className="mode-desc">Click the map to add waypoints. Each segment shows projected alkalinity deployment and CO₂ removal.</p>
-          <div className="route-stats">
-            <div className="metric"><span className="value">{waypoints.length}</span><span className="label">Waypoints</span></div>
-            <div className="metric"><span className="value">{routeKm.toFixed(0)}</span><span className="label">Route km</span></div>
-          </div>
-          {waypoints.length > 0 && (
-            <button style={{ marginTop: 12 }} onClick={() => setWaypoints([])}>Clear Route</button>
-          )}
-          {waypoints.length >= 2 && (
-            <div className="segment-list">
-              <h4>Segments</h4>
-              {waypoints.slice(1).map((wp, i) => {
-                const prev = waypoints[i]
-                const km = Math.sqrt(((wp.lat - prev.lat) * 111.32) ** 2 + ((wp.lon - prev.lon) * 111.32 * Math.cos(prev.lat * Math.PI / 180)) ** 2)
-                return (
-                  <div key={i} className="segment-card">
-                    <span>Seg {i + 1}</span>
-                    <span>{km.toFixed(1)} km</span>
-                    <span className="seg-co2">+{(km * 0.8).toFixed(1)}t CO₂</span>
-                  </div>
-                )
-              })}
-              <div className="segment-total">
-                Total est. CO₂: <strong>{(routeKm * 0.8).toFixed(1)} t</strong>
-              </div>
+
+          <div className="fleet-stats">
+            <div className="stat-card">
+              <div className="stat-value">{waypoints.length}</div>
+              <div className="stat-label">Waypoints</div>
             </div>
+            <div className="stat-card">
+              <div className="stat-value">{routeKm.toFixed(0)}</div>
+              <div className="stat-label">Route km</div>
+            </div>
+          </div>
+
+          {waypoints.length > 0 && (
+            <motion.button
+              className="run-btn"
+              style={{ marginTop: 12 }}
+              onClick={() => setWaypoints([])}
+              whileHover={{ scale: 1.015 }}
+              whileTap={{ scale: 0.985 }}
+            >
+              Clear Route
+            </motion.button>
           )}
+
+          <AnimatePresence>
+            {waypoints.length >= 2 && (
+              <motion.div
+                className="segment-list"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+              >
+                <div className="analysis-block-label">Segments</div>
+                {waypoints.slice(1).map((wp, i) => {
+                  const prev = waypoints[i]
+                  const km = Math.sqrt(
+                    ((wp.lat - prev.lat) * 111.32) ** 2 +
+                    ((wp.lon - prev.lon) * 111.32 * Math.cos(prev.lat * Math.PI / 180)) ** 2
+                  )
+                  return (
+                    <div key={i} className="segment-card">
+                      <span>Seg {i + 1}</span>
+                      <span>{km.toFixed(1)} km</span>
+                      <span className="seg-co2">+{(km * 0.8).toFixed(1)}t CO₂</span>
+                    </div>
+                  )
+                })}
+                <div className="segment-total">
+                  Total est. CO₂: <strong>{(routeKm * 0.8).toFixed(1)} t</strong>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {traffic && (
-            <div className="traffic-panel">
-              <h4>Vessel Traffic ({traffic.length})</h4>
+            <div className="calcofi-summary" style={{ marginTop: 16 }}>
+              <div className="analysis-block-label">Vessel Traffic ({traffic.length})</div>
               {traffic.map((v: any) => (
-                <div key={v.vessel_id} className="traffic-card">
-                  <span className="traffic-name">{v.name}</span>
-                  <span className="traffic-type">{v.vessel_type}</span>
-                  <span className="traffic-speed">{v.speed_kn} kn</span>
+                <div key={v.vessel_id} className="segment-card">
+                  <span className="ship-name">{v.name}</span>
+                  <span>{v.vessel_type}</span>
+                  <span>{v.speed_kn} kn</span>
                 </div>
               ))}
             </div>
@@ -676,28 +1005,24 @@ function RoutePlanningMode({ fleet }: { fleet?: ShipStatus[] }) {
         >
           <MPAOverlay />
 
-          {/* Planned route line */}
           {waypoints.length >= 2 && (
             <Source id="route" type="geojson" data={routeGeoJSON}>
               <Layer id="route-line" type="line" paint={{ 'line-color': '#22d3ee', 'line-width': 3, 'line-dasharray': [2, 1] }} />
             </Source>
           )}
 
-          {/* Waypoint markers */}
           {waypoints.map((wp, i) => (
             <Marker key={i} longitude={wp.lon} latitude={wp.lat}>
               <div className="waypoint-marker">{i + 1}</div>
             </Marker>
           ))}
 
-          {/* Fleet ships */}
           {fleet?.map(ship => (
-            <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat}>
-              <div className={`ship-marker ${ship.status}`}>🚢</div>
+            <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat} anchor="center">
+              <ShipMarker status={ship.status} />
             </Marker>
           ))}
 
-          {/* Vessel traffic */}
           {traffic?.map((v: any) => (
             <Marker key={v.vessel_id} longitude={v.lon} latitude={v.lat}>
               <div className="traffic-marker" title={`${v.name} (${v.vessel_type})`}>▲</div>
@@ -706,17 +1031,17 @@ function RoutePlanningMode({ fleet }: { fleet?: ShipStatus[] }) {
         </Map>
 
         <div className="map-legend">
-          <div className="legend-item"><div className="legend-mpa" /><span>MPA Boundary</span></div>
-          <div className="legend-item"><div style={{ width: 20, height: 3, background: '#22d3ee', borderRadius: 1 }} /><span>Planned Route</span></div>
-          <div className="legend-item"><div className="waypoint-marker" style={{ width: 18, height: 18, fontSize: '0.65rem' }}>W</div><span>Waypoint</span></div>
-          <div className="legend-item"><div className="traffic-marker" style={{ color: '#f59e0b', fontSize: '0.7rem' }}>▲</div><span>AIS Vessel</span></div>
+          <div className="legend-row"><div className="legend-swatch mpa" /><span>MPA Boundary</span></div>
+          <div className="legend-row"><div style={{ width: 20, height: 3, background: '#22d3ee', borderRadius: 1 }} /><span>Planned Route</span></div>
+          <div className="legend-row"><div className="waypoint-marker" style={{ width: 18, height: 18, fontSize: '0.65rem' }}>W</div><span>Waypoint</span></div>
+          <div className="legend-row"><div className="traffic-marker" style={{ color: '#f59e0b', fontSize: '0.7rem' }}>▲</div><span>AIS Vessel</span></div>
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Root App ─────────────────────────────────────────────────────────────────
+// ── Root App ───────────────────────────────────────────────────────────────
 
 function AppContent() {
   const [mode, setMode] = useState<AppMode>('mission')
@@ -729,11 +1054,50 @@ function AppContent() {
 
   return (
     <div className="app">
-      <header>
-        <h1>The Tiered Edge Fleet</h1>
-        <span className="subtitle">Ocean Alkalinity Enhancement Platform</span>
-        <ModeSelector mode={mode} onModeChange={setMode} />
-      </header>
+      <motion.header
+        className="header"
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 30, delay: 0.05 }}
+      >
+        <div className="header-left">
+          <motion.span
+            className="header-logo"
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.15, duration: 0.35 }}
+          >
+            The Tiered Edge Fleet
+          </motion.span>
+          <motion.div
+            className="header-sep"
+            initial={{ scaleY: 0 }}
+            animate={{ scaleY: 1 }}
+            transition={{ delay: 0.25, duration: 0.25 }}
+          />
+          <motion.span
+            className="header-sub"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3, duration: 0.35 }}
+          >
+            Ocean Alkalinity Enhancement
+          </motion.span>
+        </div>
+        <div className="header-center">
+          <ModeSelector mode={mode} onModeChange={setMode} />
+        </div>
+        <motion.div
+          className="header-right"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4, duration: 0.4 }}
+        >
+          <div className="online-dot" />
+          <span>System Online</span>
+        </motion.div>
+      </motion.header>
+
       <main>
         {mode === 'global'  && <GlobalIntelligenceMode fleet={fleet} />}
         {mode === 'mission' && <MissionControlMode fleet={fleet} />}
