@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import Map, { Source, Layer, Marker } from 'react-map-gl'
 import { motion, AnimatePresence } from 'framer-motion'
 import { API_URL, MAPBOX_TOKEN, fadeUp, staggerList } from '../constants'
 import type { ShipStatus, DiscoveryZone } from '../types'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
 import { ShipMarker } from '../components/shared/ShipMarker'
+import { AISLayer } from '../components/shared/AISLayer'
 
 interface RoutePlanningProps {
   fleet?: ShipStatus[]
+  traffic?: any[]
 }
 
 // Per-ship color palette matching status colors
@@ -84,7 +85,7 @@ function planFleetRoutes(ships: ShipStatus[], zones: DiscoveryZone[]): FleetRout
   return routes
 }
 
-export function RoutePlanning({ fleet }: RoutePlanningProps) {
+export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
   const [tab, setTab] = useState<'fleet' | 'manual'>('fleet')
   const [manualWaypoints, setManualWaypoints] = useState<{ lat: number; lon: number }[]>([])
   const [hotspots, setHotspots] = useState<DiscoveryZone[]>([])
@@ -110,13 +111,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
     }
   }
 
-  const { data: traffic } = useQuery<any[]>({
-    queryKey: ['traffic'],
-    queryFn: () => fetch(`${API_URL}/traffic`).then(r => r.json()),
-    retry: 1,
-    refetchInterval: 30000,  // refresh every 30s, not constantly
-    staleTime: 20000,
-  })
 
   const ships = fleet || []
   const zones = hotspots
@@ -514,16 +508,8 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
             </Marker>
           ))}
 
-          {/* AIS traffic */}
-          {traffic?.map((v: any) => (
-            <Marker key={v.vessel_id} longitude={v.lon} latitude={v.lat} anchor="center">
-              <div className="rp-traffic-marker" title={`${v.name} · ${v.vessel_type} · ${v.speed_kn} kn`}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M7 1 L13 13 L7 10 L1 13 Z" fill="#f59e0b" fillOpacity="0.9" />
-                </svg>
-              </div>
-            </Marker>
-          ))}
+          {/* AIS traffic — GPU-rendered via GeoJSON cluster, zero DOM nodes */}
+          <AISLayer vessels={traffic} />
         </Map>
 
         {/* Legend */}

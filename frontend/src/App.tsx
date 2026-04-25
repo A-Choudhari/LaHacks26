@@ -57,6 +57,16 @@ function AppContent() {
     refetchInterval: 10000,
   })
 
+  // Single shared AIS traffic fetch — all three pages consume this,
+  // preventing triple fetching and keeping vessel data consistent.
+  const { data: traffic } = useQuery<any[]>({
+    queryKey: ['traffic'],
+    queryFn: () => fetch(`${API_URL}/traffic`).then(r => r.json()),
+    refetchInterval: 30000,
+    staleTime: 20000,
+    retry: 1,
+  })
+
   const { data: health } = useQuery<HealthData>({
     queryKey: ['health'],
     queryFn: async () => {
@@ -160,9 +170,9 @@ function AppContent() {
 
       <main>
         <ErrorBoundary>
-          {mode === 'global'  && <GlobalIntelligence fleet={fleet} />}
-          {mode === 'mission' && <MissionControl fleet={fleet} fleetLoading={fleetLoading} />}
-          {mode === 'route'   && <RoutePlanning fleet={fleet} />}
+          {mode === 'global'  && <GlobalIntelligence fleet={fleet} traffic={traffic} />}
+          {mode === 'mission' && <MissionControl fleet={fleet} fleetLoading={fleetLoading} traffic={traffic} />}
+          {mode === 'route'   && <RoutePlanning fleet={fleet} traffic={traffic} />}
         </ErrorBoundary>
       </main>
 

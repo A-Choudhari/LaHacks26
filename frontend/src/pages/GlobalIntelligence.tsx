@@ -7,9 +7,11 @@ import { API_URL, MAPBOX_TOKEN, OAE_ZONES, fadeUp, staggerList } from '../consta
 import type { CalCOFIStation, DiscoveryZone, HotspotImpact, ShipStatus, GlobalHotspot } from '../types'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
 import { ShipMarker } from '../components/shared/ShipMarker'
+import { AISLayer } from '../components/shared/AISLayer'
 
 interface GlobalIntelligenceProps {
   fleet?: ShipStatus[]
+  traffic?: any[]
 }
 
 // score may come as string from Mapbox feature properties
@@ -31,7 +33,7 @@ const TIER_COLOR: Record<string, string> = {
   low:  'var(--danger)',
 }
 
-export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
+export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) {
   const mapRef = useRef<MapRef>(null)
 
   const { data: stations } = useQuery<CalCOFIStation[]>({
@@ -392,6 +394,7 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
           )}
 
           <MPAOverlay />
+          <AISLayer vessels={traffic} />
 
           {fleet?.map(ship => (
             <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat} anchor="center">
