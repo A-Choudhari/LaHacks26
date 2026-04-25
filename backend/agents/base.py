@@ -1,65 +1,70 @@
 """
-Base ADK agent scaffold.
+Base agent utilities — fully local via Ollama/Gemma4.
 
-When GOOGLE_API_KEY is set, agents run via Google ADK → Gemini 2.0 Flash.
-Otherwise they execute their function tools directly and return the same
-structured output (rule-based fallback — no external dependencies).
+All agents run on Gemma4 through Ollama (no cloud dependency).
+Fallback chain: Ollama/Gemma4 → rule-based deterministic computation.
 """
 
 import os
+import json
 import logging
-import uuid
-from typing import Any
+try:
+    import httpx
+    _HTTPX_AVAILABLE = True
+except ImportError:
+    _HTTPX_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-
-# Try to import ADK; degrade gracefully if key is missing or package absent
-try:
-    from google.adk import Agent
-    from google.adk.runners import Runner
-    from google.adk.sessions import InMemorySessionService
-    from google.genai import types as genai_types
-    ADK_AVAILABLE = bool(GOOGLE_API_KEY)
-    if not ADK_AVAILABLE:
-        logger.info("google-adk imported but GOOGLE_API_KEY not set — rule-based fallback active")
-except ImportError:
-    ADK_AVAILABLE = False
-    logger.warning("google-adk import failed — rule-based fallback active")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+GEMMA_MODEL = os.getenv("GEMMA_MODEL", "gemma4:e4b")
 
 
-async def run_adk_agent(agent: Any, prompt: str) -> str:
+async def is_ollama_available() -> bool:
+    """Check if Ollama is running and the Gemma4 model is loaded."""
+    if not _HTTPX_AVAILABLE:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"{OLLAMA_URL}/api/tags")
+            if resp.status_code != 200:
+                return False
+            tags = resp.json().get("models", [])
+            return any(GEMMA_MODEL.split(":")[0] in m.get("name", "") for m in tags)
+    except Exception:
+        return False
+
+
+async def query_gemma(prompt: str, system: str = "", timeout: float = 45.0) -> str:
     """
-    Run an ADK agent with a text prompt and return the final response text.
-    Requires ADK_AVAILABLE=True and a valid GOOGLE_API_KEY.
+    Send a prompt to local Gemma4 via Ollama and return the response text.
+    Raises on connection failure so callers can fall back to rule-based logic.
     """
-    session_service = InMemorySessionService()
-    app_name = agent.name
-    user_id = "oae_demo"
+    if not _HTTPX_AVAILABLE:
+        raise RuntimeError("httpx not installed — Ollama unavailable")
+    payload = {
+        "model": GEMMA_MODEL,
+        "prompt": prompt,
+        "system": system,
+        "stream": False,
+        "options": {
+            "temperature": 0.3,   # low temp for structured JSON output
+            "num_predict": 512,
+        },
+    }
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
+        resp.raise_for_status()
+        return resp.json().get("response", "")
 
-    session = await session_service.create_session(app_name=app_name, user_id=user_id)
 
-    runner = Runner(
-        agent=agent,
-        app_name=app_name,
-        session_service=session_service,
-    )
-
-    message = genai_types.Content(
-        role="user",
-        parts=[genai_types.Part(text=prompt)]
-    )
-
-    final_text = ""
-    async for event in runner.run_async(
-        user_id=user_id,
-        session_id=session.id,
-        new_message=message,
-    ):
-        if hasattr(event, "content") and event.content:
-            for part in (event.content.parts or []):
-                if hasattr(part, "text") and part.text:
-                    final_text = part.text  # keep last complete response
-
-    return final_text
+def extract_json(text: str) -> dict | None:
+    """Extract first JSON object from a string (LLM responses often wrap JSON in text)."""
+    import re
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group())
+        except json.JSONDecodeError:
+            pass
+    return None

@@ -74,7 +74,7 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 │  │ POST /simulate        — plume dispersion + MRV hash                 │    │
 │  │ GET  /fleet           — OAE ship fleet status                       │    │
 │  │ POST /analyze         — AI safety analysis (agent → Ollama → rules) │    │
-│  │ POST /agent           — dispatch to ADK agents                      │    │
+│  │ POST /agent           — dispatch to local agents                    │    │
 │  │ POST /discover        — AI-recommended deployment zones             │    │
 │  │ POST /hotspot-impact  — deep-dive metric analysis for a site        │    │
 │  │ GET  /ocean-state     — real-time ocean conditions for a lat/lon    │    │
@@ -83,10 +83,10 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ ADK Agents (backend/agents/)                                        │    │
+│  │ Local Agents (backend/agents/) — fully offline, no cloud deps       │    │
 │  │ • SpatialIntelligenceAgent — site selection scoring                 │    │
 │  │ • GeochemistAgent — safety analysis, CO₂ projection                 │    │
-│  │ Fallback chain: Gemini 2.0 Flash → Ollama/Gemma4 → Rule-based       │    │
+│  │ Fallback chain: Ollama/Gemma4 (local) → Rule-based deterministic    │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └───────────────────────────────────┬─────────────────────────────────────────┘
                                     │
@@ -152,7 +152,8 @@ frontend/src/
 - `backend/data_fetcher.py` - Real NOAA ERDDAP fetchers (`fetch_sst`, `fetch_calcofi`, `fetch_chlorophyll`, `fetch_currents`, `refresh_all`) with 24-hour file cache in `data/real/`
 - `backend/agents/spatial_intelligence.py` - Site selection scoring agent
 - `backend/agents/geochemist.py` - Safety analysis agent with function calling
-- `backend/agents/base.py` - ADK agent base class and helpers
+- `backend/agents/base.py` - Local agent base: `query_gemma()` (Ollama/Gemma4), `extract_json()`, `is_ollama_available()`
+- `backend/benchmarks.py` - Algorithm benchmarks: 12 checks for haversine, TSP ratio, fleet assignment, hotspot scoring. Run: `PYTHONIOENCODING=utf-8 python benchmarks.py`
 - `julia/plume_simulator.jl` - Oceananigans.jl LES simulation (requires Julia + CUDA)
 - `data/mock/plume_simulation.json` - Pre-computed fallback plume data
 - `data/mock/calcofi_stations.json` - CalCOFI oceanographic station data (real data, local cache)
@@ -319,6 +320,71 @@ SVG top-down vessel: hull path, superstructure rect, bow line, port/starboard ci
 | `@keyframes spin` | `index.css` | 360° spinner for compute button loading state |
 | `@keyframes hotspot-pulse` | `index.css` | Scale 1→1.6, opacity 0.6→0 pulse for hotspot rings |
 
+### Local Agent Architecture (Phase 4)
+
+All agents run **fully locally** via Ollama/Gemma4 — no cloud dependency, no API keys required.
+
+**Flow for every agent call:**
+1. Tool functions execute deterministically (always — provides hard numbers regardless of LLM state)
+2. Tool results sent to Gemma4 (`gemma4:e4b`) via Ollama for natural-language synthesis
+3. Response parsed as JSON; if malformed or Ollama unreachable, rule-based synthesis used instead
+
+**`backend/agents/base.py`**
+- `query_gemma(prompt, system, timeout)` — POSTs to `OLLAMA_URL/api/generate` with low temperature (0.3) and 512-token limit for deterministic JSON output
+- `is_ollama_available()` — checks `/api/tags` and verifies `gemma4` is loaded
+- `extract_json(text)` — regex-extracts first JSON object from LLM response
+- `httpx` import is guarded for compatibility when running `benchmarks.py` from base Python
+
+**`backend/agents/geochemist.py`** — `GeochemistAgent`
+- Always runs: `check_aragonite_threshold()`, `check_alkalinity_threshold()`, `project_co2_removal()` (deterministic)
+- Gemma4 synthesises: `safety_assessment` (string), `co2_projection` (string), `recommendations` (list)
+- `model_used` field: `"gemma4:e4b (local)"` or `"rule-based-fallback"`
+
+**`backend/agents/spatial_intelligence.py`** — `SpatialIntelligenceAgent`
+- Always runs: `get_mpa_overlap()`, `get_ocean_state()` (deterministic)
+- Gemma4 synthesises: `suitability_score` (0–1), `reason` (string), `mpa_conflict` (bool)
+- `model_used` field: `"gemma4:e4b (local)"` or `"rule-based-fallback"`
+
+### Route Planning — AI Fleet Tab
+
+`RoutePlanning.tsx` has two tabs: **AI Fleet** and **Manual**.
+
+**AI Fleet tab** calls `POST /discover` via `computeRoutes()` async function:
+- `hotspots: DiscoveryZone[]` state — populated from `/discover` response
+- `isDiscovering: boolean` — spinner/disabled state while fetch is in flight
+- `routesComputed: boolean` — shows route cards after first successful fetch
+- `planFleetRoutes(ships, zones)` — greedy nearest-neighbor assignment (runs client-side from hotspots state)
+- Compute button always visible; spinner shows "Analyzing ocean conditions…" during fetch
+- No waypoints needed for AI Fleet tab — zones come from server
+
+### Algorithm Benchmarks
+
+`backend/benchmarks.py` — run with `PYTHONIOENCODING=utf-8 python benchmarks.py`
+
+**12/12 checks pass** (as of 2026-04-25):
+| Benchmark | Result |
+|---|---|
+| Haversine accuracy | max 1.5% error |
+| Greedy TSP optimality | 1.054x mean, 1.211x worst |
+| Fleet assignment completeness | 6/6 zones assigned |
+| SST weight effect (Δ5°C vs 25°C) | Δ0.230 |
+| Wind weight effect (Δ2 vs 10 m/s) | Δ0.195 |
+| Latitude weight (tropical vs Southern Ocean) | Δ0.200 |
+| Known good zones score ≥0.70 | 3/3 (SO: 0.931, NA: 0.810, CA: 0.715) |
+| Known bad zones score <0.70 | 3/3 (tropics: 0.14–0.17) |
+| Score monotonicity (decreasing SST) | pass |
+| MPA detection | 3/3 |
+| Ocean state plausibility | pass |
+| Rule-based score determinism | pass |
+
+Performance: Haversine 1.25M calls/sec, fleet assignment 0.18ms per call.
+
+**Hotspot scoring formula**: `SST×0.30 + Wind×0.30 + Lat/mixing×0.25 + UpwellingBonus≤0.25`
+- SST score: `(28 - sst) / 26`, clamped 0–1. Cooler = higher CO₂ solubility (Henry's Law)
+- Wind score: ramps 0→1 from 0→12 m/s, then falls above 18 m/s. Gas transfer k∝u² (Wanninkhof 2014)
+- Lat score: Southern Ocean 1.0 > Subpolar 0.9 > Mid-lat 0.8 > Subtropics 0.55 > Tropics 0.20
+- Upwelling bonus: cumulative bonus for EBUS zones (California, Humboldt, Canary, Benguela, Southern Ocean, etc.), capped at 0.25
+
 ### Backend Startup — Ocean Data Pre-Caching
 `main.py` uses a FastAPI `lifespan` async context manager (not deprecated `@app.on_event`). On startup, it spawns a daemon thread calling `data_fetcher.refresh_all()`, which fetches and writes:
 - `data/real/sst.json` — NOAA OISST v2.1 SST (12-hour cache)
@@ -336,7 +402,7 @@ Every simulation result is hashed (SHA-256) and logged to `data/mrv_log.jsonl` f
 
 The platform must work without internet (ship at sea scenario):
 - Backend auto-detects Julia availability and falls back to mock data
-- AI analysis falls back: ADK agent → Ollama/Gemma4 → rule-based logic
+- AI analysis falls back: Ollama/Gemma4 (local) → rule-based deterministic logic
 - All external API data is mocked (MarineTraffic, CalCOFI)
 
 ## Environment Variables
@@ -350,7 +416,8 @@ VITE_API_URL=http://localhost:8001                  # Must be 8001 — backend p
 
 Backend (optional):
 ```
-GOOGLE_API_KEY=your-key  # Enables Gemini 2.0 Flash in ADK agents
+OLLAMA_URL=http://localhost:11434  # Override Ollama endpoint (default: localhost:11434)
+GEMMA_MODEL=gemma4:e4b             # Override Gemma model tag (default: gemma4:e4b)
 ```
 
 ## gstack
