@@ -1,0 +1,45 @@
+{
+  "date": "2026-04-25",
+  "window": "7d",
+  "metrics": {
+    "commits": 34,
+    "contributors": 4,
+    "prs_merged": 8,
+    "insertions": 23636,
+    "deletions": 4066,
+    "net_loc": 19570,
+    "test_loc": 0,
+    "test_ratio": 0,
+    "active_days": 2,
+    "sessions": 5,
+    "deep_sessions": 2,
+    "avg_session_minutes": 120,
+    "loc_per_session_hour": 4700,
+    "feat_pct": 0.35,
+    "fix_pct": 0.18,
+    "peak_hour": 9,
+    "ai_assisted_commits": 0
+  },
+  "authors": {
+    "Yashmit Bhaverisetti": { "commits": 11, "insertions": 11500, "deletions": 2200, "test_ratio": 0, "top_area": "frontend/src/" },
+    "Thaarak": { "commits": 5, "insertions": 4900, "deletions": 100, "test_ratio": 0, "top_area": "backend/main.py" },
+    "A-Choudhari": { "commits": 4, "insertions": 8800, "deletions": 700, "test_ratio": 0, "top_area": "backend/" },
+    "Akshat Choudhari": { "commits": 1, "insertions": 0, "deletions": 0, "test_ratio": 0, "top_area": "merges" }
+  },
+  "version_range": ["0.0.0", "0.1.0"],
+  "streak_days": 2,
+  "tweetable": "Week of Apr 18: 34 commits (4 contributors), 23.6k LOC, 0% tests, 8 PRs, peak: 9am | Streak: 2d",
+  "backlog": {
+    "total_open": 6,
+    "p0_p1": 0,
+    "p2": 2,
+    "completed_this_period": 51,
+    "added_this_period": 6
+  },
+  "test_health": {
+    "total_test_files": 28,
+    "tests_added_this_period": 0,
+    "regression_test_commits": 0,
+    "test_files_changed": 0
+  }
+}
