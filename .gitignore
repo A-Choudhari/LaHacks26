@@ -240,3 +240,10 @@ frontend/dist/
 .vscode/
 *.swp
 *.swo
+
+
+data/*
+
+# Data
+data/real/
+data/mrv_log.jsonl
