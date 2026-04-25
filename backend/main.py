@@ -8,6 +8,8 @@ import hashlib
 import subprocess
 import tempfile
 import asyncio
+import time
+import math
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -878,24 +880,66 @@ class VesselTraffic(BaseModel):
     speed_kn: float
 
 
+# ── Live AIS Vessel Simulation ─────────────────────────────────────────────────
+
+_vessel_state: dict = {"vessels": [], "last_update": 0.0}
+
+
+def _load_base_vessels() -> list[dict]:
+    """Load base vessel data from mock file."""
+    ais_file = MOCK_DATA_DIR / "ais_vessels.json"
+    if ais_file.exists():
+        with open(ais_file) as f:
+            return json.load(f)
+    return []
+
+
+def _simulate_vessel_movement(vessel: dict, elapsed_seconds: float) -> dict:
+    """
+    Move vessel along heading at speed.
+    1 knot ≈ 1.852 km/h ≈ 0.0003 degrees/second at ~34°N latitude.
+    """
+    # Convert speed from knots to degrees/second (approximate)
+    speed_deg_per_sec = vessel["speed_kn"] * 0.0003 / 3600
+    distance = speed_deg_per_sec * elapsed_seconds
+
+    heading_rad = math.radians(vessel["heading"])
+    new_lat = vessel["lat"] + distance * math.cos(heading_rad)
+    new_lon = vessel["lon"] + distance * math.sin(heading_rad)
+
+    # Boundary check - reverse heading if out of Southern California area
+    if new_lat < 33.0 or new_lat > 34.5 or new_lon < -119.5 or new_lon > -117.5:
+        vessel["heading"] = (vessel["heading"] + 180) % 360
+
+    vessel["lat"] = new_lat
+    vessel["lon"] = new_lon
+    return vessel
+
+
 @app.get("/traffic", response_model=list[VesselTraffic])
 async def get_vessel_traffic():
     """
-    Mock AIS vessel traffic near the OAE deployment zone.
-    Used in Route Planning mode to show conflict avoidance.
+    Simulated live AIS vessel traffic near the OAE deployment zone.
+    Vessels move in real-time based on heading and speed.
+    Used in Route Planning mode to show realistic shipping traffic.
     """
-    return [
-        VesselTraffic(vessel_id="ais-001", name="Ever Given II", vessel_type="container",
-                      lat=34.12, lon=-119.05, heading=112.0, speed_kn=14.2),
-        VesselTraffic(vessel_id="ais-002", name="Nordic Spirit", vessel_type="tanker",
-                      lat=33.65, lon=-118.80, heading=285.0, speed_kn=11.8),
-        VesselTraffic(vessel_id="ais-003", name="Pacific Pioneer", vessel_type="bulk_carrier",
-                      lat=34.25, lon=-118.50, heading=200.0, speed_kn=9.5),
-        VesselTraffic(vessel_id="ais-004", name="Sea Hawk", vessel_type="fishing",
-                      lat=33.90, lon=-119.30, heading=045.0, speed_kn=6.1),
-        VesselTraffic(vessel_id="ais-005", name="Catalina Express", vessel_type="ferry",
-                      lat=33.75, lon=-118.35, heading=230.0, speed_kn=22.0),
-    ]
+    global _vessel_state
+    now = time.time()
+
+    # Initialize or reset if stale (>5 min without requests)
+    if not _vessel_state["vessels"] or now - _vessel_state["last_update"] > 300:
+        _vessel_state["vessels"] = _load_base_vessels()
+        _vessel_state["last_update"] = now
+        return [VesselTraffic(**v) for v in _vessel_state["vessels"]]
+
+    # Calculate elapsed time and update positions
+    elapsed = now - _vessel_state["last_update"]
+    _vessel_state["last_update"] = now
+
+    for vessel in _vessel_state["vessels"]:
+        _simulate_vessel_movement(vessel, elapsed)
+
+    return [VesselTraffic(**v) for v in _vessel_state["vessels"]]
 
 
 # ── Hotspot Impact Analysis ───────────────────────────────────────────────────

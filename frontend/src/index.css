@@ -259,6 +259,56 @@ main {
   transform: scale(1.04);
 }
 
+/* ── Depth slider labels ── */
+.depth-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+
+/* ── 3D/2D View toggle ── */
+.view-toggle-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.view-3d-btn,
+.view-2d-btn {
+  padding: 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.view-3d-btn {
+  background: linear-gradient(135deg, rgba(0, 200, 240, 0.15), rgba(0, 255, 200, 0.1));
+  border: 1px solid rgba(0, 200, 240, 0.4);
+  color: var(--deploy);
+}
+
+.view-3d-btn:hover {
+  background: linear-gradient(135deg, rgba(0, 200, 240, 0.25), rgba(0, 255, 200, 0.15));
+  border-color: rgba(0, 200, 240, 0.6);
+}
+
+.view-2d-btn {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+}
+
+.view-2d-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-1);
+}
+
 /* ── Feedstock Segmented Control ── */
 .segmented {
   position: relative;

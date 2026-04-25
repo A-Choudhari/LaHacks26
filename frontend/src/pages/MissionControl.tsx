@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import Map, { Marker, MapRef } from 'react-map-gl'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import * as SliderPrimitive from '@radix-ui/react-slider'
 import { API_URL, MAPBOX_TOKEN } from '../constants'
 import type { SimulationParams, SimulationResult, ShipStatus } from '../types'
 import { SimulationPanel } from '../components/mission/SimulationPanel'
@@ -22,6 +23,7 @@ interface MissionControlProps {
 export function MissionControl({ fleet, fleetLoading }: MissionControlProps) {
   const [simulationResult, setSimulationResult] = useState<SimulationResult>()
   const [showPlume, setShowPlume] = useState(false)
+  const [depthLevel, setDepthLevel] = useState(0.5) // 0 = top, 1 = bottom
   const mapRef = useRef<MapRef>(null)
   const threeLayerRef = useRef<PlumeThreeLayer | null>(null)
 
@@ -63,6 +65,13 @@ export function MissionControl({ fleet, fleetLoading }: MissionControlProps) {
     }
   }, [simulationResult])
 
+  // Update Three.js layer when depth changes
+  useEffect(() => {
+    if (threeLayerRef.current && simulationResult) {
+      threeLayerRef.current.setDepthLevel(depthLevel)
+    }
+  }, [depthLevel, simulationResult])
+
   return (
     <div className="mode-layout">
       <motion.div
@@ -77,6 +86,91 @@ export function MissionControl({ fleet, fleetLoading }: MissionControlProps) {
           result={simulationResult}
         />
         <AIPanel result={simulationResult} />
+
+        <AnimatePresence>
+          {simulationResult && (
+            <motion.div
+              className="panel"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            >
+              <div className="panel-label">3D Visualization</div>
+
+              <div className="view-toggle-row">
+                <motion.button
+                  className="view-3d-btn"
+                  onClick={() => {
+                    const map = mapRef.current?.getMap()
+                    if (map) {
+                      map.easeTo({
+                        pitch: 60,
+                        bearing: -20,
+                        center: [-118.24, 34.05],
+                        zoom: 9,
+                        duration: 1000,
+                      })
+                    }
+                  }}
+                  whileHover={{ scale: 1.015 }}
+                  whileTap={{ scale: 0.985 }}
+                >
+                  3D View
+                </motion.button>
+                <motion.button
+                  className="view-2d-btn"
+                  onClick={() => {
+                    const map = mapRef.current?.getMap()
+                    if (map) {
+                      map.easeTo({
+                        pitch: 0,
+                        bearing: 0,
+                        center: [-119.1, 33.55],
+                        zoom: 7,
+                        duration: 1000,
+                      })
+                    }
+                  }}
+                  whileHover={{ scale: 1.015 }}
+                  whileTap={{ scale: 0.985 }}
+                >
+                  2D View
+                </motion.button>
+              </div>
+
+              <div className="param-item" style={{ marginTop: 16 }}>
+                <div className="param-row">
+                  <span className="param-label">Section Depth</span>
+                  <motion.span
+                    key={depthLevel}
+                    className="param-value"
+                    initial={{ scale: 1.18, opacity: 0.55 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 520, damping: 22 }}
+                  >
+                    {Math.round(depthLevel * 100)}<span className="param-unit">%</span>
+                  </motion.span>
+                </div>
+                <SliderPrimitive.Root
+                  className="slider-root"
+                  min={0} max={1} step={0.05}
+                  value={[depthLevel]}
+                  onValueChange={([v]) => setDepthLevel(v)}
+                >
+                  <SliderPrimitive.Track className="slider-track">
+                    <SliderPrimitive.Range className="slider-range" />
+                  </SliderPrimitive.Track>
+                  <SliderPrimitive.Thumb className="slider-thumb" aria-label="Section Depth" />
+                </SliderPrimitive.Root>
+                <div className="depth-labels">
+                  <span>Surface</span>
+                  <span>Deep</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       <div className="map-container">
