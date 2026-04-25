@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 import { API_URL } from './constants'
@@ -12,13 +12,32 @@ import { RoutePlanning } from './pages/RoutePlanning'
 
 const queryClient = new QueryClient()
 
+interface HealthData {
+  status: string
+  julia_available: boolean
+  mock_data_available: boolean
+  ollama_available: boolean
+  latency: number
+}
+
 function AppContent() {
   const [mode, setMode] = useState<AppMode>('mission')
 
-  const { data: fleet } = useQuery<ShipStatus[]>({
+  const { data: fleet, isLoading: fleetLoading } = useQuery<ShipStatus[]>({
     queryKey: ['fleet'],
     queryFn: () => fetch(`${API_URL}/fleet`).then(r => r.json()),
     refetchInterval: 10000,
+  })
+
+  const { data: health } = useQuery<HealthData>({
+    queryKey: ['health'],
+    queryFn: async () => {
+      const t = Date.now()
+      const res = await fetch(`${API_URL}/health`)
+      const data = await res.json()
+      return { ...data, latency: Date.now() - t }
+    },
+    refetchInterval: 5000,
   })
 
   return (
@@ -65,13 +84,31 @@ function AppContent() {
           transition={{ delay: 0.4, duration: 0.4 }}
         >
           <div className="online-dot" />
-          <span>System Online</span>
+          <span>Online</span>
+          <AnimatePresence>
+            {health && (
+              <motion.div
+                className="header-chips"
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              >
+                <div className="header-chip">{health.latency}ms</div>
+                <div className={`header-chip ${health.ollama_available ? 'chip-ok' : 'chip-off'}`}>
+                  Gemma {health.ollama_available ? '✓' : '✗'}
+                </div>
+                <div className={`header-chip ${health.julia_available ? 'chip-ok' : 'chip-off'}`}>
+                  {health.julia_available ? 'Live' : 'Mock'}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </motion.header>
 
       <main>
         {mode === 'global'  && <GlobalIntelligence fleet={fleet} />}
-        {mode === 'mission' && <MissionControl fleet={fleet} />}
+        {mode === 'mission' && <MissionControl fleet={fleet} fleetLoading={fleetLoading} />}
         {mode === 'route'   && <RoutePlanning fleet={fleet} />}
       </main>
     </div>

@@ -16,9 +16,10 @@ import { PlumeThreeLayer } from '../ThreeLayer'
 
 interface MissionControlProps {
   fleet?: ShipStatus[]
+  fleetLoading?: boolean
 }
 
-export function MissionControl({ fleet }: MissionControlProps) {
+export function MissionControl({ fleet, fleetLoading }: MissionControlProps) {
   const [simulationResult, setSimulationResult] = useState<SimulationResult>()
   const [showPlume, setShowPlume] = useState(false)
   const mapRef = useRef<MapRef>(null)
@@ -91,7 +92,7 @@ export function MissionControl({ fleet }: MissionControlProps) {
           <PlumeHeatmap visible={showPlume} simulationData={simulationResult} />
           {fleet?.map((ship) => (
             <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat} anchor="center">
-              <ShipMarker status={ship.status} />
+              <ShipMarker status={ship.status} name={ship.name} lat={ship.position.lat} lon={ship.position.lon} co2={ship.co2_removed_tons} />
             </Marker>
           ))}
         </Map>
@@ -105,7 +106,7 @@ export function MissionControl({ fleet }: MissionControlProps) {
         animate={{ x: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 280, damping: 30 }}
       >
-        <FleetPanel ships={fleet} />
+        <FleetPanel ships={fleet} isLoading={fleetLoading} />
       </motion.div>
     </div>
   )

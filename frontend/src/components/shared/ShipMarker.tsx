@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+
 export const STATUS_COLORS: Record<string, string> = {
   active:    '#4ade80',
   deploying: '#00c8f0',
@@ -6,13 +9,22 @@ export const STATUS_COLORS: Record<string, string> = {
 
 interface ShipMarkerProps {
   status: string
+  name?: string
+  lat?: number
+  lon?: number
+  co2?: number
 }
 
-export function ShipMarker({ status }: ShipMarkerProps) {
+export function ShipMarker({ status, name, lat, lon, co2 }: ShipMarkerProps) {
+  const [hovered, setHovered] = useState(false)
   const color = STATUS_COLORS[status] ?? '#6b7a8d'
 
   return (
-    <div className="ship-marker-wrap">
+    <div
+      className="ship-marker-wrap"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {status === 'deploying' && (
         <div className="ship-pulse-ring" style={{ background: color, width: 28, height: 28 }} />
       )}
@@ -27,6 +39,31 @@ export function ShipMarker({ status }: ShipMarkerProps) {
         <circle cx="10.5" cy="15" r="1" fill="white" fillOpacity="0.35" />
         <circle cx="17.5" cy="15" r="1" fill="white" fillOpacity="0.35" />
       </svg>
+
+      <AnimatePresence>
+        {hovered && name && (
+          <motion.div
+            className="ship-tooltip"
+            initial={{ opacity: 0, scale: 0.88, y: 4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.88, y: 4 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+          >
+            <div className="ship-tooltip-name">{name}</div>
+            <div className="ship-tooltip-row">
+              <span className={`ship-tooltip-status ${status}`}>{status}</span>
+              {co2 !== undefined && (
+                <span className="ship-tooltip-co2">{co2.toFixed(1)} t CO₂</span>
+              )}
+            </div>
+            {lat !== undefined && lon !== undefined && (
+              <div className="ship-tooltip-pos">
+                {lat.toFixed(3)}°N · {Math.abs(lon).toFixed(3)}°W
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

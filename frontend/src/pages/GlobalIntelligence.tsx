@@ -265,7 +265,7 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
 
           {fleet?.map(ship => (
             <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat} anchor="center">
-              <ShipMarker status={ship.status} />
+              <ShipMarker status={ship.status} name={ship.name} lat={ship.position.lat} lon={ship.position.lon} co2={ship.co2_removed_tons} />
             </Marker>
           ))}
 

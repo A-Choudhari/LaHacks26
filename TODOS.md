@@ -21,46 +21,18 @@
 - [x] `package.json` fixed — removed duplicate `@tanstack/react-query`, added missing comma before `three`
 - [x] Mission Control map zoom on load changed from 8.5 → 7 (shows more Pacific coast context)
 - [x] Favicon — custom sailboat + waves SVG at `frontend/public/favicon.svg`; cache-busted via `?v=2` in `index.html`
+- [x] **GB10 Julia/CUDA validated** — Julia 1.12.5 + CUDA 13.0 local toolkit confirmed on ASUS Ascent GX10 (driver 580, sm_121 Blackwell, 113 GiB). Fix: `CUDA.set_runtime_version!(v"13.0", local_toolkit=true)` to resolve 12.6→13.0 mismatch. Live simulation path is go.
 
 ---
 
-## UI Phase 2 — Remaining UI Polish
+## UI Phase 2 — Completed
 
-### U2. Ship marker tooltips on hover
-**Priority:** HIGH
-**What:** On hover over a ship SVG marker on the map, show a floating tooltip with ship name, status, position (lat/lon), and CO₂ removed. Use a `motion.div` that fades in with scale.
-**Why:** The map markers are now visually rich but carry no readable info on hover
-**Status:** TODO
-
-### U3. AI Analysis panel — streaming / typewriter text
-**Priority:** MEDIUM
-**What:** When Gemma returns analysis text, animate it in character-by-character (typewriter effect) using a `useEffect` + `useState` interval. Add a blinking cursor while typing.
-**Why:** Makes the AI feel alive and responsive rather than text popping in all at once
-**Status:** TODO
-
-### U6. Loading skeletons
-**Priority:** MEDIUM
-**What:** While fleet data is loading, show 3 pulsing skeleton ship cards in the right panel. While simulation is running, show a shimmer placeholder in the result area. Use CSS `@keyframes` shimmer (no extra lib needed).
-**Why:** Currently panels either show nothing or snap in — skeletons make the loading state feel intentional
-**Status:** TODO
-
-### U7. Impact metrics — animated number count-up
-**Priority:** LOW
-**What:** When CO₂ numbers change (fleet load, new simulation), animate the value counting up from the previous value using Framer Motion's `useMotionValue` + `animate()`. Duration ~0.6s with easeOut.
-**Why:** Numbers that count up read as live data, not static labels
-**Status:** TODO
-
-### U8. Header system status indicators
-**Priority:** LOW
-**What:** Add small status chips next to "System Online": backend latency (ms), Ollama status (online/offline), data source (live/mock). Poll `/health` every 5s. Each chip fades in/out on status change.
-**Why:** Makes the header feel like mission control monitoring rather than just a title bar
-**Status:** TODO
-
-### U9. Responsive / narrow viewport
-**Priority:** LOW
-**What:** Below 1200px width, collapse sidebars into bottom sheet drawers that slide up on a tab press. Map takes full screen. Uses `AnimatePresence` + `y` spring for the drawer.
-**Why:** Judges may demo on a laptop — the three-panel layout breaks below ~1100px
-**Status:** TODO
+- [x] **U2** — Ship marker tooltips: `ShipMarker` accepts `name/lat/lon/co2` props; `AnimatePresence` tooltip above marker shows name, status badge, CO₂, coordinates on hover
+- [x] **U3** — AI typewriter: `TypewriterText` component in `AIPanel.tsx` types each character at 12ms/char with blinking `▌` cursor; recommendations stagger in as list items after typewriter finishes
+- [x] **U6** — Loading skeletons: `FleetPanel` accepts `isLoading` prop; shows 3 shimmer skeleton cards (CSS `@keyframes shimmer`) while fleet data loads; stat tiles also shimmer
+- [x] **U7** — Count-up animation: `useCountUp` hook in `ImpactMetrics.tsx` animates from previous value to new value with cubic ease-out over 700ms using `requestAnimationFrame`
+- [x] **U8** — Header status chips: `/health` polled every 5s; shows latency (ms), Gemma ✓/✗, Live/Mock data source as small color-coded chips; fade-in on first load
+- [x] **U9** — Responsive: at 1100px sidebar narrows to 240px and chips hide; at 860px sidebars collapse entirely so map takes full width
 - [x] Mapbox token configured
 - [x] Ollama + Gemma 2 setup
 - [x] Three.js and wire up a canvas layer (`three` + `@types/three` installed; `ThreeLayer.ts` implements `mapboxgl.CustomLayerInterface`)
@@ -90,11 +62,7 @@ Tasks below are ordered for execution. Complete each group before moving to the 
 
 ### 1. Validate GB10 Julia/CUDA
 **Priority:** CRITICAL
-**Effort:** 5 minutes
-**What:** On the ASUS Ascent GX10, run `julia -e 'using CUDA; CUDA.versioninfo()'`
-**Why:** If CUDA.jl fails on GB10's ARM64 + Blackwell, the entire live simulation path is dead — better to know now than during judging
-**Fallback:** If it fails, skip live Julia entirely and rely on pre-computed data
-**Status:** TODO
+**Status:** ✅ DONE — GB10 CUDA validated. Julia 1.12.5 + CUDA 13.0 local toolkit, driver 580, sm_121 Blackwell, 113 GiB available. Required `CUDA.set_runtime_version!(v"13.0", local_toolkit=true)` to resolve 12.6→13.0 version mismatch. Live simulation path is confirmed working.
 
 ---
 
