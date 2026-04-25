@@ -10,13 +10,22 @@ import tempfile
 import asyncio
 import time
 import math
+import logging
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# Real ocean data fetcher
+from data_fetcher import (
+    fetch_calcofi, fetch_sst, fetch_chlorophyll,
+    fetch_currents, compute_oae_scores, _load, refresh_all
+)
+
+logger = logging.getLogger(__name__)
 
 # ADK agents (imported lazily to avoid startup crash if deps are broken)
 _spatial_agent = None
@@ -55,6 +64,7 @@ app.add_middleware(
 PROJECT_ROOT = Path(__file__).parent.parent
 JULIA_SCRIPT = PROJECT_ROOT / "julia" / "plume_simulator.jl"
 MOCK_DATA_DIR = PROJECT_ROOT / "data" / "mock"
+REAL_DATA_DIR = PROJECT_ROOT / "data" / "real"
 
 # Check if Julia is actually installed
 def is_julia_available() -> bool:
@@ -858,16 +868,61 @@ async def discover_zones():
 
 
 @app.get("/oceanographic")
-async def get_oceanographic_data():
+async def get_oceanographic_data(background_tasks: BackgroundTasks):
     """
-    CalCOFI-style oceanographic station data for Mode 1 Global Intelligence.
-    Loads from mock file; in production would query calcofi.io/api.
+    Real CalCOFI CTD hydrographic data from NOAA ERDDAP.
+    Dataset: erdCalCOFINOAAhydros — temperature, salinity, dissolved oxygen.
+    Falls back to mock data if ERDDAP is unavailable.
     """
+    stations = fetch_calcofi()
+    if stations:
+        # Trigger background refresh if cache is getting stale
+        background_tasks.add_task(fetch_calcofi)
+        return stations
+    # Fallback to mock
     mock_file = MOCK_DATA_DIR / "calcofi_stations.json"
     if mock_file.exists():
         with open(mock_file) as f:
             return json.load(f)
     return []
+
+
+@app.get("/sst")
+async def get_sea_surface_temperature():
+    """
+    Real NOAA OISST v2.1 sea surface temperature for CA coastal waters.
+    Dataset: ncdcOisst21Agg_LonPM180 — 0.25° resolution, near-daily updates.
+    """
+    return fetch_sst()
+
+
+@app.get("/currents")
+async def get_ocean_currents():
+    """
+    Real OSCAR 1/3° surface current data (u/v vectors).
+    Dataset: jplOscar — climatological reference for CA coastal current patterns.
+    Returns vectors with speed and direction for route optimization.
+    """
+    return fetch_currents()
+
+
+@app.get("/zone-scores")
+async def get_zone_scores():
+    """
+    Real OAE zone suitability scores computed from ERDDAP SST + chlorophyll.
+    Score components: SST (60% — cooler = better CO2 solubility) +
+                      Chlorophyll (40% — lower = less biotic interference).
+    """
+    cached = _load("zone_scores")
+    if cached:
+        return cached
+    # Compute fresh
+    sst = fetch_sst()
+    chl = fetch_chlorophyll()
+    if sst and chl:
+        scores = compute_oae_scores(sst, chl)
+        return scores
+    return {}
 
 
 class VesselTraffic(BaseModel):
@@ -886,11 +941,12 @@ _vessel_state: dict = {"vessels": [], "last_update": 0.0}
 
 
 def _load_base_vessels() -> list[dict]:
-    """Load base vessel data from mock file."""
-    ais_file = MOCK_DATA_DIR / "ais_vessels.json"
-    if ais_file.exists():
-        with open(ais_file) as f:
-            return json.load(f)
+    """Load real AIS vessel data (curated from NOAA AIS 2024-01-01, CA coastal waters)."""
+    # Prefer real data, fall back to mock
+    for ais_file in [REAL_DATA_DIR / "ais_vessels.json", MOCK_DATA_DIR / "ais_vessels.json"]:
+        if ais_file.exists():
+            with open(ais_file) as f:
+                return json.load(f)
     return []
 
 
