@@ -13,16 +13,18 @@
 - [x] Impact metrics overlay (CO₂ removed, safety status)
 - [x] MPA (Marine Protected Area) overlay on map
 - [x] **phase:ui1** — Full UI overhaul (Framer Motion, Radix Slider, minimal dark theme, custom ship SVG markers, organic MPA blobs, sliding feedstock control, spring animations throughout)
+- [x] **U1** — Mode switcher: sliding segmented control in header (`mode-seg` / `mode-seg-track` / `mode-seg-btn`), spring-animated pill indicator, `header-center` absolutely positioned
+- [x] **U4** — Global Intelligence UI: organic OAE zone blobs with glow layers, zone cards matching ship-card style (pip + name + label + score + chevron), stagger animations, CalCOFI stat-cards, zone detail popup (top-center AnimatePresence slide-down), discovery zone cards clickable, `zoneTier()` handles string/number scores from Mapbox
+- [x] **U5** — Route Planning UI: three-panel layout (controls + map + AIS Traffic right sidebar), animated hint card, CO₂ estimate banner, Undo Last + Clear All buttons, staggered segment cards with cyan numbered circles, SVG arrow traffic markers, glow+dashed route line layers, clickable waypoint removal
+- [x] App split into separate page/component files (`types.ts`, `constants.ts`, `pages/`, `components/ui/`, `components/shared/`, `components/mission/`)
+- [x] CORS fix — added `localhost:3001` to allowed origins in `backend/main.py`
+- [x] `package.json` fixed — removed duplicate `@tanstack/react-query`, added missing comma before `three`
+- [x] Mission Control map zoom on load changed from 8.5 → 7 (shows more Pacific coast context)
+- [x] Favicon — custom sailboat + waves SVG at `frontend/public/favicon.svg`; cache-busted via `?v=2` in `index.html`
 
 ---
 
-## UI Phase 2 — Remaining UI Polish (branch: phase:ui2)
-
-### U1. Mode switcher navigation
-**Priority:** HIGH
-**What:** Top-nav tabs: **Global Intelligence** | **Mission Control** | **Route Planning**. Animated underline indicator that slides between tabs (shared layout Framer Motion). Current layout is Mode 2. Modes 1 and 3 show placeholder panels.
-**Why:** Judges need to see the full product vision — even stubbed modes with the nav frame make it legible
-**Status:** TODO
+## UI Phase 2 — Remaining UI Polish
 
 ### U2. Ship marker tooltips on hover
 **Priority:** HIGH
@@ -34,18 +36,6 @@
 **Priority:** MEDIUM
 **What:** When Gemma returns analysis text, animate it in character-by-character (typewriter effect) using a `useEffect` + `useState` interval. Add a blinking cursor while typing.
 **Why:** Makes the AI feel alive and responsive rather than text popping in all at once
-**Status:** TODO
-
-### U4. Mode 1: Global Intelligence UI
-**Priority:** MEDIUM
-**What:** Full-screen Pacific-centered map view. Candidate OAE deployment zones as glowing polygon overlays. CalCOFI station dots. "Best Zones" highlight panel on right. Consistent design tokens and panel styles from phase:ui1.
-**Depends on:** TODOS #10, U1
-**Status:** TODO
-
-### U5. Mode 3: Route Planning UI
-**Priority:** MEDIUM
-**What:** Click-to-place waypoints on map. Animated route line drawn between them. Per-waypoint sidebar showing projected alkalinity discharge. "Optimize Route" button. Consistent with phase:ui1 design language.
-**Depends on:** TODOS #11, U1
 **Status:** TODO
 
 ### U6. Loading skeletons

@@ -96,17 +96,47 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 2. **Mode 2**: Frontend sends params to `POST /simulate` → Backend returns plume data with MRV hash → Frontend renders heatmap + Three.js isosurface → User clicks "Analyze" → `POST /analyze` → AI safety assessment
 3. **Mode 3**: Frontend calls `GET /traffic` → renders AIS vessels; user builds route → per-segment CO₂ estimates
 
-### Key Files
-- `backend/main.py` - FastAPI server with /health, /simulate, /fleet, /analyze endpoints
-- `frontend/src/App.tsx` - Single-file React app with all components
-- `frontend/src/index.css` - All styles — design tokens live in `:root` at the top
-- `frontend/src/lib/utils.ts` - `cn()` helper for class merging (clsx + tailwind-merge)
-- `backend/main.py` - FastAPI server with all endpoints
+### Frontend File Structure
+
+```
+frontend/src/
+├── App.tsx                               # Root — header, mode switcher, QueryClientProvider
+├── types.ts                              # All shared TypeScript interfaces
+├── constants.ts                          # API_URL, MAPBOX_TOKEN, GeoJSON data, animation variants
+├── index.css                             # All styles — design tokens in :root at the top
+├── ThreeLayer.ts                         # Three.js Mapbox custom layer (isosurface + velocity arrows)
+├── lib/
+│   └── utils.ts                          # cn() helper (clsx + tailwind-merge)
+├── components/
+│   ├── ui/
+│   │   ├── ParamSlider.tsx               # Radix slider with animated value pop
+│   │   └── FeedstockPicker.tsx           # Sliding segmented control (Olivine / NaOH)
+│   ├── shared/
+│   │   ├── ShipMarker.tsx                # SVG top-down vessel icon with status colors
+│   │   ├── MPAOverlay.tsx                # Mapbox layers — organic MPA blobs with glow
+│   │   ├── PlumeHeatmap.tsx              # Mapbox heatmap layer for alkalinity plume
+│   │   ├── MapLegend.tsx                 # Bottom-left map legend overlay
+│   │   ├── ImpactMetrics.tsx             # Top-center CO₂ / safety / MRV chips
+│   │   ├── FleetPanel.tsx                # Right sidebar — fleet summary + ship cards
+│   │   └── ModeSelector.tsx              # Sliding segmented control in header (3-col spring pill)
+│   └── mission/
+│       ├── SimulationPanel.tsx           # Left sidebar — sliders, feedstock, run button, result card
+│       └── AIPanel.tsx                   # Left sidebar — Gemma analysis panel
+└── pages/
+    ├── GlobalIntelligence.tsx            # Mode 1 — Pacific view, OAE zones, CalCOFI, discovery
+    ├── MissionControl.tsx                # Mode 2 — simulation, heatmap, Three.js, fleet
+    └── RoutePlanning.tsx                 # Mode 3 — waypoints, route line, AIS traffic
+```
+
+### Other Notes
+- Favicon: `frontend/public/favicon.svg` — sailboat + waves SVG, referenced in `index.html` with `?v=2` cache-bust
+- Mission Control initial map zoom: `7` (shows Pacific coast context; was 8.5)
+
+### Backend Key Files
+- `backend/main.py` - FastAPI server with all endpoints — CORS allows `localhost:3000` and `3001`
 - `backend/agents/spatial_intelligence.py` - Site selection scoring agent
 - `backend/agents/geochemist.py` - Safety analysis agent with function calling
 - `backend/agents/base.py` - ADK agent base class and helpers
-- `frontend/src/App.tsx` - React app with three-mode UI system
-- `frontend/src/ThreeLayer.ts` - Three.js Mapbox custom layer (isosurface bounding box, velocity arrows)
 - `julia/plume_simulator.jl` - Oceananigans.jl LES simulation (requires Julia + CUDA)
 - `data/mock/plume_simulation.json` - Pre-computed fallback plume data
 - `data/mock/calcofi_stations.json` - CalCOFI oceanographic station data
@@ -116,14 +146,13 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 - Ω_aragonite > 30.0 → runaway carbonate precipitation (UNSAFE)
 - Total alkalinity > 3500 µmol/kg → olivine toxicity (UNSAFE)
 
-## UI Stack (phase:ui1)
+## UI Stack (phase:ui1 + ui2)
 
 Installed in `frontend/`:
 - **Framer Motion** — all animations (`motion.*`, `AnimatePresence`, spring physics)
 - **Radix UI Slider** (`@radix-ui/react-slider`) — custom styled range inputs
-- **Tailwind CSS v4** + `@tailwindcss/postcss` — utility classes available but CSS variables are the primary styling approach
+- **Tailwind CSS v4** + `@tailwindcss/postcss` — utility classes available; CSS variables are primary
 - **clsx + tailwind-merge** — `cn()` utility at `src/lib/utils.ts`
-- **Radix UI** (tabs, select, tooltip, separator, progress) — installed, not yet wired
 
 ### Design Tokens (in `frontend/src/index.css` `:root`)
 | Token | Value | Usage |
@@ -132,26 +161,70 @@ Installed in `frontend/`:
 | `--panel-bg` | `rgba(12,15,20,0.96)` | Sidebar + overlay panels |
 | `--accent` | `#ffffff` | Sliders, active states (white — minimal use) |
 | `--deploy` | `#00c8f0` | Deploying ship status only |
-| `--success` | `#4ade80` | Safe status, active ships |
+| `--success` | `#4ade80` | Safe status, active ships, CO₂ estimates |
 | `--danger` | `#f87171` | Unsafe status, MPA zones |
-| `--warning` | `#fbbf24` | Idle ships |
+| `--warning` | `#fbbf24` | Idle ships, AIS traffic |
 | `--text-1/2/3` | light→muted grey | Heading / body / label hierarchy |
 
-### Animation Patterns
-- Sidebars slide in from edges on mount (`x: ±280 → 0`, spring)
+### Shared Animation Patterns
+- Sidebars slide in from edges on mount (`x: ±280 → 0`, spring stiffness 280, damping 30)
 - Header staggers in element-by-element on load
-- Result/analysis cards fade+slide up with `AnimatePresence`
-- Ship cards stagger in with `0.07s` children delay
-- Feedstock segmented control: indicator slides with `x` spring (`stiffness:500, damping:38`)
-- Slider value number pops on change (`key={value}`, scale spring)
+- `AnimatePresence` on all conditional panels — result cards, analysis, zone detail, hint card
+- Cards stagger in via `staggerList` / `fadeUp` variants (0.07s delay, defined in `constants.ts`)
+- Slider value number pops on change (`key={value}`, scale spring stiffness 520)
 - Online dot breathes with CSS `@keyframes dot-breathe`
 - Deploying ship markers pulse with CSS `@keyframes ring-out`
 
+### Segmented Control Pattern (reused across the app)
+All tab/toggle controls use the same sliding pill approach:
+```
+position:relative grid → padding:3px → motion.div indicator (position:absolute)
+indicator width = calc(N%-Xpx), x = index * 100%
+```
+- **FeedstockPicker** — 2-col (`calc(50%-3px)`), `x: 0 | 100%`
+- **ModeSelector** — 3-col (`calc(33.333%-2px)`), `x: 0 | 100% | 200%`, centered in header via `.header-center { position:absolute; left:50%; transform:translateX(-50%) }`
+
 ### Component Patterns
-- **ParamSlider** — Radix Root/Track/Range/Thumb, animated value display
-- **FeedstockPicker** — segmented control with sliding `motion.div` indicator
-- **ShipMarker** — SVG top-down vessel with hull, superstructure, port/starboard lights
-- **MPAOverlay** — 3 organic blob polygons (Channel Islands, Point Dume, Santa Monica Bay) with glow + dotted border layers
+
+**ModeSelector** (`components/shared/ModeSelector.tsx`)
+Sliding segmented control in header. Spring transition stiffness 500 / damping 38. Labels: "Global Intelligence" | "Mission Control" | "Route Planning".
+
+**ParamSlider** (`components/ui/ParamSlider.tsx`)
+Radix Root/Track/Range/Thumb. 14px track, 28px thumb, gradient fill with glow. Value display pops on change.
+
+**FeedstockPicker** (`components/ui/FeedstockPicker.tsx`)
+2-option segmented control. Sliding `motion.div` indicator.
+
+**ShipMarker** (`components/shared/ShipMarker.tsx`)
+SVG top-down vessel: hull path, superstructure rect, bow line, port/starboard circles. Status-colored with pulsing ring for deploying.
+
+**MPAOverlay** (`components/shared/MPAOverlay.tsx`)
+3 organic blob polygons. 3 layers: wide blur glow line → translucent fill → dotted outline (1.5/2.5 dash ratio).
+
+### Page-Specific Patterns
+
+**GlobalIntelligence** (`pages/GlobalIntelligence.tsx`)
+- OAE zones: organic blob polygons in constants, 3-layer map treatment (glow + fill + dotted outline), color-coded by score
+- Zone cards: ship-card DNA — left stripe via `::before`, pip dot, name + label + score, animated `›` chevron, `whileHover scale 1.015`
+- Zone detail popup: `position:absolute; top:16px; left:50%` within map-container, slides down from `y:-16` on open
+- `zoneTier()` accepts `number | string` (Mapbox serializes properties as strings on map click)
+- CalCOFI data renders as `stat-card` tiles, not raw `<p>` text
+- Discovery zones clickable — trigger same detail popup
+
+**MissionControl** (`pages/MissionControl.tsx`)
+- Three-panel: left sidebar (SimulationPanel + AIPanel) + map + right sidebar (FleetPanel)
+- Three.js layer (`PlumeThreeLayer`) added on map load via `onLoad` callback
+- Simulation result card spring-animates in below the Run button
+
+**RoutePlanning** (`pages/RoutePlanning.tsx`)
+- Three-panel: left (route controls) + map + right (AIS Traffic)
+- Hint card animates out when first waypoint placed
+- Undo Last removes last waypoint; Clear All removes all; individual waypoints removable by click
+- Route line: glow layer (14px blur) + dashed solid line (2.5px)
+- Waypoint markers: cyan circles with numbered labels, spring-animate in on placement
+- AIS traffic: SVG arrow markers on map, ship-card style in right sidebar with amber pip
+- Segment cards stagger in, total CO₂ shown in green summary row
+
 ### MRV (Measurement, Reporting, Verification)
 Every simulation result is hashed (SHA-256) and logged to `data/mrv_log.jsonl` for tamper-evident carbon credit verification. The hash is displayed in the Impact Metrics overlay.
 
