@@ -1,30 +1,29 @@
 """
-Agent 2: Geochemist / Dispatcher — safety analysis with function calling.
+Agent 2: Geochemist — safety analysis and CO₂ projection.
 
-Function tools:
-  check_aragonite_threshold(value)                  → safe: bool, margin: float
-  check_alkalinity_threshold(value)                 → safe: bool, margin: float
+Function tools (always run deterministically):
+  check_aragonite_threshold(value)                       → safe: bool, margin: float
+  check_alkalinity_threshold(value)                      → safe: bool, margin: float
   project_co2_removal(alkalinity, temperature, area_km2) → co2_tons: float
 
-ADK path: Gemini 2.0 Flash calls all three tools then synthesises the report.
-Fallback: tools are called directly; response is composed deterministically.
+Agent flow:
+  1. Run all three tool functions to get hard numbers.
+  2. Send tool results to local Gemma4 for natural-language synthesis.
+  3. If Gemma4 unavailable, compose response deterministically from tool outputs.
 """
 
 import json
 import logging
-import re
-from typing import Any
 
-from .base import ADK_AVAILABLE, run_adk_agent
+from .base import query_gemma, extract_json
 
 logger = logging.getLogger(__name__)
 
-# Safety thresholds from OAE research (CLAUDE.md)
 _ARAGONITE_LIMIT = 30.0
 _ALKALINITY_LIMIT = 3500.0
 
 
-# ── ADK function tools ────────────────────────────────────────────────────────
+# ── Tool functions (deterministic) ───────────────────────────────────────────
 
 def check_aragonite_threshold(value: float) -> dict:
     """Check whether Ω_aragonite is within the safe operational limit (< 30.0)."""
@@ -67,7 +66,6 @@ def project_co2_removal(alkalinity: float, temperature: float, area_km2: float) 
     delta_ta = max(0.0, alkalinity - 2300.0)
     base_eff = 0.8
     temp_adj = max(0.5, base_eff - 0.012 * max(0.0, temperature - 15.0))
-    # mol TA × efficiency × CO2 molar mass (44 g/mol) × area in m² × depth proxy (10 m) / 1e12 → Mtons → tons
     area_m2 = area_km2 * 1e6
     co2_tons = delta_ta * temp_adj * 44 * area_m2 * 10 / 1e12
     return {
@@ -79,28 +77,27 @@ def project_co2_removal(alkalinity: float, temperature: float, area_km2: float) 
     }
 
 
-# ── Rule-based synthesis (fallback) ──────────────────────────────────────────
+# ── Rule-based synthesis (deterministic fallback) ─────────────────────────────
 
-def _build_response(arag_result: dict, alk_result: dict, co2_result: dict, feedstock: str) -> dict:
-    is_safe = arag_result["safe"] and alk_result["safe"]
+def _rule_based_synthesis(arag: dict, alk: dict, co2: dict, feedstock: str) -> dict:
+    is_safe = arag["safe"] and alk["safe"]
     status = "SAFE" if is_safe else "UNSAFE"
 
     safety_text = (
         f"Deployment is {status}. "
-        f"Aragonite saturation: {arag_result['value']:.2f} — {arag_result['message']}. "
-        f"Total alkalinity: {alk_result['value']:.0f} µmol/kg — {alk_result['message']}."
+        f"Aragonite saturation: {arag['value']:.2f} — {arag['message']}. "
+        f"Total alkalinity: {alk['value']:.0f} µmol/kg — {alk['message']}."
     )
-
     co2_text = (
-        f"{co2_result['message']}. "
-        f"Based on {feedstock} dissolution with {co2_result['efficiency']:.0%} OAE efficiency "
-        f"over {co2_result['area_km2']} km²."
+        f"{co2['message']}. "
+        f"Based on {feedstock} dissolution with {co2['efficiency']:.0%} OAE efficiency "
+        f"over {co2['area_km2']} km²."
     )
 
     recs = []
-    if arag_result["value"] > 25.0:
+    if arag["value"] > 25.0:
         recs.append("Consider reducing discharge rate to lower aragonite saturation.")
-    if alk_result["value"] > 3200.0:
+    if alk["value"] > 3200.0:
         recs.append("Monitor for olivine toxicity effects on marine life.")
     if not recs:
         recs.append("Deployment parameters are within optimal ranges.")
@@ -110,42 +107,17 @@ def _build_response(arag_result: dict, alk_result: dict, co2_result: dict, feeds
         "co2_projection": co2_text,
         "recommendations": recs,
         "confidence": 0.85,
-        "tool_results": {
-            "aragonite": arag_result,
-            "alkalinity": alk_result,
-            "co2": co2_result,
-        },
+        "tool_results": {"aragonite": arag, "alkalinity": alk, "co2": co2},
     }
 
 
 # ── Public agent interface ────────────────────────────────────────────────────
 
 class GeochemistAgent:
-    """Geochemistry safety-analysis agent wrapping Google ADK with rule-based fallback."""
-
-    def __init__(self) -> None:
-        self._adk_agent: Any = None
-        if ADK_AVAILABLE:
-            try:
-                from google.adk import Agent
-                self._adk_agent = Agent(
-                    name="geochemist",
-                    model="gemini-2.0-flash",
-                    description="OAE safety analysis and CO₂ projection agent",
-                    instruction=(
-                        "You are a marine geochemistry expert. When given OAE simulation results, "
-                        "call check_aragonite_threshold, check_alkalinity_threshold, and project_co2_removal "
-                        "with the provided values. Then synthesise the results into a JSON with fields: "
-                        "safety_assessment (string), co2_projection (string), recommendations (list of strings)."
-                    ),
-                    tools=[
-                        check_aragonite_threshold,
-                        check_alkalinity_threshold,
-                        project_co2_removal,
-                    ],
-                )
-            except Exception as e:
-                logger.warning("Failed to build ADK geochemist agent: %s", e)
+    """
+    Geochemistry safety-analysis agent — runs locally via Gemma4/Ollama.
+    Tool functions always execute deterministically; Gemma4 synthesises the narrative.
+    """
 
     async def run(
         self,
@@ -155,34 +127,36 @@ class GeochemistAgent:
         feedstock: str,
         area_km2: float = 25.0,
     ) -> dict:
-        """Analyse simulation results and return safety + CO₂ assessment."""
-
-        if self._adk_agent is not None:
-            try:
-                prompt = (
-                    f"Analyse this OAE deployment:\n"
-                    f"  max_aragonite_saturation = {max_aragonite}\n"
-                    f"  max_total_alkalinity = {max_alkalinity} µmol/kg\n"
-                    f"  temperature = {temperature}°C\n"
-                    f"  feedstock = {feedstock}\n"
-                    f"  deployment_area = {area_km2} km²\n\n"
-                    "Call all three tools then return JSON with safety_assessment, "
-                    "co2_projection, and recommendations."
-                )
-                text = await run_adk_agent(self._adk_agent, prompt)
-                m = re.search(r"\{.*\}", text, re.DOTALL)
-                if m:
-                    parsed = json.loads(m.group())
-                    parsed["model_used"] = "gemini-2.0-flash (ADK)"
-                    parsed.setdefault("confidence", 0.92)
-                    return parsed
-            except Exception as e:
-                logger.warning("ADK geochemist agent failed, using fallback: %s", e)
-
-        # Rule-based fallback — call tools directly
+        # Always run tools deterministically
         arag_r = check_aragonite_threshold(max_aragonite)
         alk_r = check_alkalinity_threshold(max_alkalinity)
         co2_r = project_co2_removal(max_alkalinity, temperature, area_km2)
-        result = _build_response(arag_r, alk_r, co2_r, feedstock)
+
+        # Try Gemma4 for richer natural-language synthesis
+        try:
+            system = (
+                "You are a marine geochemistry expert analysing OAE (Ocean Alkalinity Enhancement) deployments. "
+                "Given tool results, write a concise safety assessment and CO₂ projection. "
+                "Respond ONLY with valid JSON containing: "
+                "safety_assessment (string), co2_projection (string), recommendations (array of strings)."
+            )
+            prompt = (
+                f"Tool results for an OAE deployment using {feedstock}:\n\n"
+                f"Aragonite check: {json.dumps(arag_r)}\n"
+                f"Alkalinity check: {json.dumps(alk_r)}\n"
+                f"CO₂ projection: {json.dumps(co2_r)}\n\n"
+                "Synthesise a JSON response with safety_assessment, co2_projection, and recommendations."
+            )
+            text = await query_gemma(prompt, system=system)
+            parsed = extract_json(text)
+            if parsed and "safety_assessment" in parsed:
+                parsed["model_used"] = "gemma4:e4b (local)"
+                parsed.setdefault("confidence", 0.92)
+                parsed["tool_results"] = {"aragonite": arag_r, "alkalinity": alk_r, "co2": co2_r}
+                return parsed
+        except Exception as e:
+            logger.info("Gemma4 synthesis unavailable, using rule-based: %s", e)
+
+        result = _rule_based_synthesis(arag_r, alk_r, co2_r, feedstock)
         result["model_used"] = "rule-based-fallback"
         return result

@@ -87,6 +87,28 @@ function planFleetRoutes(ships: ShipStatus[], zones: DiscoveryZone[]): FleetRout
 export function RoutePlanning({ fleet }: RoutePlanningProps) {
   const [tab, setTab] = useState<'fleet' | 'manual'>('fleet')
   const [manualWaypoints, setManualWaypoints] = useState<{ lat: number; lon: number }[]>([])
+  const [hotspots, setHotspots] = useState<DiscoveryZone[]>([])
+  const [isDiscovering, setIsDiscovering] = useState(false)
+  const [routesComputed, setRoutesComputed] = useState(false)
+
+  const computeRoutes = async () => {
+    setIsDiscovering(true)
+    try {
+      const res = await fetch(`${API_URL}/discover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: 33.80, lon: -119.50, radius_km: 500 }),
+      })
+      const data = await res.json()
+      const zones: DiscoveryZone[] = data.zones ?? data
+      setHotspots(zones)
+      setRoutesComputed(true)
+    } catch (e) {
+      console.error('discover failed', e)
+    } finally {
+      setIsDiscovering(false)
+    }
+  }
 
   const { data: traffic } = useQuery<any[]>({
     queryKey: ['traffic'],
@@ -96,32 +118,8 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
     staleTime: 20000,
   })
 
-  // Convert vessels to GeoJSON once — GPU-rendered, handles 3000+ ships with zero lag
-  const trafficGeoJSON = useMemo(() => ({
-    type: 'FeatureCollection' as const,
-    features: (traffic ?? []).map((v: any) => ({
-      type: 'Feature' as const,
-      properties: {
-        name:        v.name,
-        vessel_type: v.vessel_type,
-        speed_kn:    v.speed_kn,
-        conflict:    v.conflict_risk,
-      },
-      geometry: { type: 'Point' as const, coordinates: [v.lon, v.lat] },
-    })),
-  }), [traffic])
-
-  const routeGeoJSON = useMemo(() => ({
-    type: 'FeatureCollection' as const,
-    features: waypoints.length >= 2 ? [{
-      type: 'Feature' as const,
-      properties: {},
-      geometry: { type: 'LineString' as const, coordinates: waypoints.map(w => [w.lon, w.lat]) },
-    }] : [],
-  }), [waypoints])
-
   const ships = fleet || []
-  const zones = hotspots || []
+  const zones = hotspots
   const routes = planFleetRoutes(ships, zones)
 
   // Manual route stats
@@ -173,27 +171,11 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               >
-                <div className="rp-hint-icon">+</div>
-                <div>
-                  <div className="rp-hint-title">Place waypoints</div>
-                  <div className="rp-hint-sub">Click anywhere on the map to begin your route</div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {waypoints.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-              >
                 <motion.button
                   className={`rp-compute-btn${isDiscovering ? ' loading' : ''}`}
                   onClick={() => computeRoutes()}
                   disabled={isDiscovering}
+                  style={{ marginTop: 10 }}
                   whileHover={isDiscovering ? {} : { scale: 1.015 }}
                   whileTap={isDiscovering ? {} : { scale: 0.985 }}
                 >
