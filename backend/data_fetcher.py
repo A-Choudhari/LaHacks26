@@ -278,7 +278,85 @@ def fetch_currents(force: bool = False) -> list:
         return cached["vectors"] if cached else []
 
 
-# ── 5. OAE Zone Scoring (composite from real data) ───────────────────────────
+# ── 5. Global OAE Hotspots ────────────────────────────────────────────────────
+
+def fetch_global_oae_hotspots(force: bool = False) -> list:
+    """
+    Compute global OAE suitability from NOAA OISST at 8° coarse grid.
+    Key drivers: cool SST (better CO2 solubility) + mid-latitude location
+    (better wind mixing + away from biological-hot tropics).
+    Returns: list of {lat, lon, sst_c, oae_score} covering the global ocean.
+    """
+    cache_name = "global_hotspots"
+    if not force and not _is_stale(_cache_path(cache_name), max_age_hours=48):
+        cached = _load(cache_name)
+        if cached:
+            logger.info(f"Global hotspots: using cache ({len(cached['hotspots'])} points)")
+            return cached["hotspots"]
+
+    # 8° stride on a 0.25° grid = skip every 32 cells
+    STRIDE = 32
+
+    for days_back in [90, 180, 365]:
+        ref_date = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%dT00:00:00Z")
+        url = (
+            f"{ERDDAP}/griddap/ncdcOisst21Agg_LonPM180.json"
+            f"?sst[({ref_date})][0][(-70):{STRIDE}:(70)][(-180):{STRIDE}:(179)]"
+        )
+        try:
+            r = requests.get(url, timeout=30)
+            if r.status_code != 200:
+                continue
+
+            import math as _math
+            rows = r.json()["table"]["rows"]
+            hotspots = []
+
+            for row in rows:
+                _, _, lat, lon, sst = row
+                if sst is None:
+                    continue
+
+                # OAE suitability scoring:
+                # 1. Temperature: cooler = more CO2 solubility (optimal 5-18°C)
+                sst_score = max(0.0, min(1.0, (22.0 - sst) / 20.0))
+
+                # 2. Latitude: mid-latitudes have better wind mixing
+                #    Optimal band: 30-60° N or S — avoid tropics and polar ice
+                lat_abs = abs(lat)
+                if lat_abs < 15:
+                    lat_score = 0.1   # tropics — warm, less effective
+                elif lat_abs < 35:
+                    lat_score = 0.6   # subtropics — decent
+                elif lat_abs < 60:
+                    lat_score = 1.0   # mid-latitudes — optimal
+                else:
+                    lat_score = 0.4   # high latitudes — cold but ice risk
+
+                oae_score = round(0.55 * sst_score + 0.45 * lat_score, 3)
+
+                if oae_score >= 0.25:  # filter out clearly unsuitable locations
+                    hotspots.append({
+                        "lat": round(lat, 2),
+                        "lon": round(lon, 2),
+                        "sst_c": round(sst, 1),
+                        "oae_score": oae_score,
+                    })
+
+            if hotspots:
+                hotspots.sort(key=lambda x: x["oae_score"], reverse=True)
+                _save(cache_name, {"fetched_at": ref_date, "hotspots": hotspots})
+                logger.info(f"Global hotspots: {len(hotspots)} viable points from {ref_date}")
+                return hotspots
+
+        except Exception as e:
+            logger.error(f"Global hotspots fetch failed ({days_back}d ago): {e}")
+
+    cached = _load(cache_name)
+    return cached["hotspots"] if cached else []
+
+
+# ── 6. OAE Zone Scoring (composite from real data) ───────────────────────────
 
 def compute_oae_scores(
     sst_data: list,
@@ -343,7 +421,7 @@ def compute_oae_scores(
     return results
 
 
-# ── 6. Refresh all datasets ───────────────────────────────────────────────────
+# ── 7. Refresh all datasets ───────────────────────────────────────────────────
 
 def refresh_all(force: bool = False) -> dict:
     """Fetch all real datasets. Called at startup and on demand."""

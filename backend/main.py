@@ -22,7 +22,8 @@ from pydantic import BaseModel, Field
 # Real ocean data fetcher
 from data_fetcher import (
     fetch_calcofi, fetch_sst, fetch_chlorophyll,
-    fetch_currents, compute_oae_scores, _load, refresh_all
+    fetch_currents, compute_oae_scores, fetch_global_oae_hotspots,
+    _load, refresh_all
 )
 
 logger = logging.getLogger(__name__)
@@ -904,6 +905,17 @@ async def get_ocean_currents():
     Returns vectors with speed and direction for route optimization.
     """
     return fetch_currents()
+
+
+@app.get("/global-hotspots")
+async def get_global_hotspots():
+    """
+    Real global OAE suitability hotspots computed from NOAA OISST (8° coarse grid).
+    Score = 55% SST (cooler = better CO2 solubility) + 45% latitude band
+    (mid-latitudes 30-60° optimal for wind mixing, away from biologically hot tropics).
+    Returns 400+ points covering the global ocean.
+    """
+    return fetch_global_oae_hotspots()
 
 
 @app.get("/zone-scores")

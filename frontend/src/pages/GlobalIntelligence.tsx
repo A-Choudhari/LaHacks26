@@ -1,11 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import Map, { Source, Layer, Marker } from 'react-map-gl'
+import Map, { Source, Layer, Marker, MapRef } from 'react-map-gl'
+import { useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { API_URL, MAPBOX_TOKEN, OAE_ZONES, fadeUp, staggerList } from '../constants'
 import type { CalCOFIStation, DiscoveryZone, HotspotImpact, ShipStatus } from '../types'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
 import { ShipMarker } from '../components/shared/ShipMarker'
+
+interface GlobalHotspot {
+  lat: number
+  lon: number
+  sst_c: number
+  oae_score: number
+}
 
 interface GlobalIntelligenceProps {
   fleet?: ShipStatus[]
@@ -31,15 +39,37 @@ const TIER_COLOR: Record<string, string> = {
 }
 
 export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
+  const mapRef = useRef<MapRef>(null)
+
   const { data: stations } = useQuery<CalCOFIStation[]>({
     queryKey: ['oceanographic'],
     queryFn: () => fetch(`${API_URL}/oceanographic`).then(r => r.json()),
     retry: 1,
   })
 
+  const { data: globalHotspots } = useQuery<GlobalHotspot[]>({
+    queryKey: ['global-hotspots'],
+    queryFn: () => fetch(`${API_URL}/global-hotspots`).then(r => r.json()),
+    retry: 1,
+    staleTime: 1000 * 60 * 60 * 6, // 6 hours
+  })
+
   const [selectedZone, setSelectedZone] = useState<any>(null)
   const [discoveryZones, setDiscoveryZones] = useState<DiscoveryZone[]>([])
   const [isDiscovering, setIsDiscovering] = useState(false)
+
+  // Set globe atmosphere on map load
+  const handleMapLoad = useCallback(() => {
+    const map = mapRef.current?.getMap()
+    if (!map) return
+    map.setFog({
+      color: 'rgba(10, 15, 25, 0.6)',
+      'high-color': '#0d2137',
+      'horizon-blend': 0.04,
+      'space-color': '#07101d',
+      'star-intensity': 0.5,
+    } as any)
+  }, [])
   const [impactData, setImpactData] = useState<Record<number, HotspotImpact>>({})
   const [impactLoading, setImpactLoading] = useState<Set<number>>(new Set())
   const [selectedDiscIdx, setSelectedDiscIdx] = useState<number | null>(null)
@@ -86,6 +116,15 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
       type: 'Feature' as const,
       properties: { id: s.station_id, temp: s.temperature_c },
       geometry: { type: 'Point' as const, coordinates: [s.lon, s.lat] },
+    })),
+  }
+
+  const hotspotGeoJSON = {
+    type: 'FeatureCollection' as const,
+    features: (globalHotspots ?? []).map(h => ({
+      type: 'Feature' as const,
+      properties: { oae_score: h.oae_score, sst_c: h.sst_c },
+      geometry: { type: 'Point' as const, coordinates: [h.lon, h.lat] },
     })),
   }
 
@@ -234,11 +273,14 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
       {/* ── Map ── */}
       <div className="map-container">
         <Map
-          initialViewState={{ longitude: -120, latitude: 34, zoom: 5 }}
+          ref={mapRef}
+          initialViewState={{ longitude: -110, latitude: 20, zoom: 1.8 }}
           style={{ width: '100%', height: '100%' }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           mapboxAccessToken={MAPBOX_TOKEN}
+          projection={{ name: 'globe' }}
           reuseMaps
+          onLoad={handleMapLoad}
           interactiveLayerIds={['oae-fill']}
           onClick={e => {
             // Only update selection when clicking a named zone feature on the map
@@ -247,6 +289,41 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
           }}
         >
           {/* OAE zones — glow + fill + dotted outline */}
+          {/* Global OAE hotspots — real OISST data, 8° coarse grid */}
+          <Source id="global-hotspots" type="geojson" data={hotspotGeoJSON}>
+            <Layer
+              id="hotspot-glow"
+              type="circle"
+              paint={{
+                'circle-radius': ['interpolate', ['linear'], ['get', 'oae_score'], 0.25, 6, 1.0, 18],
+                'circle-color': ['interpolate', ['linear'], ['get', 'oae_score'],
+                  0.25, '#3b82f6',
+                  0.55, '#22d3ee',
+                  0.75, '#4ade80',
+                  1.0,  '#86efac',
+                ],
+                'circle-opacity': 0.18,
+                'circle-blur': 1.2,
+              }}
+            />
+            <Layer
+              id="hotspot-core"
+              type="circle"
+              paint={{
+                'circle-radius': ['interpolate', ['linear'], ['get', 'oae_score'], 0.25, 2.5, 1.0, 6],
+                'circle-color': ['interpolate', ['linear'], ['get', 'oae_score'],
+                  0.25, '#60a5fa',
+                  0.55, '#22d3ee',
+                  0.75, '#4ade80',
+                  1.0,  '#86efac',
+                ],
+                'circle-opacity': 0.75,
+                'circle-stroke-width': 0.5,
+                'circle-stroke-color': 'rgba(255,255,255,0.2)',
+              }}
+            />
+          </Source>
+
           <Source id="oae-zones" type="geojson" data={OAE_ZONES}>
             <Layer
               id="oae-glow"
