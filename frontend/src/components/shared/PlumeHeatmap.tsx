@@ -4,11 +4,13 @@ import type { SimulationResult } from '../../types'
 interface PlumeHeatmapProps {
   visible: boolean
   simulationData?: SimulationResult
+  centerLat?: number
+  centerLon?: number
 }
 
-export function PlumeHeatmap({ visible, simulationData }: PlumeHeatmapProps) {
-  const baseLon = -118.2437
-  const baseLat = 34.0522
+export function PlumeHeatmap({ visible, simulationData, centerLat, centerLon }: PlumeHeatmapProps) {
+  const baseLon = centerLon ?? -119.50
+  const baseLat = centerLat ?? 33.80
 
   const features = (() => {
     if (!visible) return []

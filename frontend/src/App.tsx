@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, Component } from 'react'
+import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -9,6 +10,24 @@ import { ModeSelector } from './components/shared/ModeSelector'
 import { GlobalIntelligence } from './pages/GlobalIntelligence'
 import { MissionControl } from './pages/MissionControl'
 import { RoutePlanning } from './pages/RoutePlanning'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  render() {
+    if (this.state.error) {
+      const err = this.state.error as Error
+      return (
+        <div style={{ padding: 32, color: '#f87171', fontFamily: 'monospace', fontSize: 13, background: '#0c0f14', height: '100%', overflow: 'auto' }}>
+          <div style={{ marginBottom: 8, color: '#dde3ea', fontWeight: 700 }}>Runtime Error (check console for full trace)</div>
+          <div style={{ color: '#f87171' }}>{err.message}</div>
+          <pre style={{ marginTop: 12, color: '#6b7a8d', fontSize: 11, whiteSpace: 'pre-wrap' }}>{err.stack}</pre>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const queryClient = new QueryClient()
 
@@ -98,7 +117,7 @@ function AppContent() {
                   Gemma {health.ollama_available ? '✓' : '✗'}
                 </div>
                 <div className={`header-chip ${health.julia_available ? 'chip-ok' : 'chip-off'}`}>
-                  {health.julia_available ? 'Live' : 'Mock'}
+                  GPU {health.julia_available ? '✓' : '✗'}
                 </div>
               </motion.div>
             )}
@@ -107,9 +126,11 @@ function AppContent() {
       </motion.header>
 
       <main>
-        {mode === 'global'  && <GlobalIntelligence fleet={fleet} />}
-        {mode === 'mission' && <MissionControl fleet={fleet} fleetLoading={fleetLoading} />}
-        {mode === 'route'   && <RoutePlanning fleet={fleet} />}
+        <ErrorBoundary>
+          {mode === 'global'  && <GlobalIntelligence fleet={fleet} />}
+          {mode === 'mission' && <MissionControl fleet={fleet} fleetLoading={fleetLoading} />}
+          {mode === 'route'   && <RoutePlanning fleet={fleet} />}
+        </ErrorBoundary>
       </main>
     </div>
   )
