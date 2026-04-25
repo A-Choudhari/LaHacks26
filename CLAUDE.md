@@ -22,6 +22,7 @@ uvicorn main:app --port 8001 --reload
 ### Frontend (React + Vite)
 ```bash
 cd frontend
+npm install      # First time — install dependencies including Three.js
 npm run dev      # Dev server on port 3000
 npm run build    # Production build
 ```
@@ -40,42 +41,98 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 ## Architecture
 
 ```
-React + Mapbox (3000) ←→ FastAPI (8001) ←→ Julia/Oceananigans (optional)
-        ↓                      ↓
-   2D Heatmap            Gemma 2 via Ollama
-   MPA Overlays          (fallback: rule-based)
-   Fleet Dashboard
+┌────────────────────────────────────────────────────────────────────────────┐
+│                           Frontend (React + Vite)                          │
+│  ┌─────────────────┬─────────────────┬─────────────────┐                   │
+│  │ Mode 1: Global  │ Mode 2: Mission │ Mode 3: Route   │  ModeSelector     │
+│  │ Intelligence    │ Control         │ Planning        │                   │
+│  └────────┬────────┴────────┬────────┴────────┬────────┘                   │
+│           │                 │                 │                            │
+│           ▼                 ▼                 ▼                            │
+│  ┌────────────────────────────────────────────────────────┐               │
+│  │         Mapbox GL + Three.js (ThreeLayer.ts)           │               │
+│  │  • 2D Heatmap • 3D Isosurface BBox • Velocity Arrows   │               │
+│  │  • MPA Overlays • CalCOFI Stations • AIS Traffic       │               │
+│  └────────────────────────────────────────────────────────┘               │
+└─────────────────────────────────┬──────────────────────────────────────────┘
+                                  │
+                                  ▼ REST API
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Backend (FastAPI :8001)                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Endpoints                                                           │    │
+│  │ GET  /health       — system status                                  │    │
+│  │ POST /simulate     — plume dispersion + MRV hash                    │    │
+│  │ GET  /fleet        — OAE ship fleet status                          │    │
+│  │ POST /analyze      — AI safety analysis (agent → Ollama → rules)    │    │
+│  │ POST /agent        — dispatch to ADK agents                         │    │
+│  │ POST /discover     — AI-recommended deployment zones                │    │
+│  │ GET  /oceanographic— CalCOFI station data                           │    │
+│  │ GET  /traffic      — AIS vessel traffic                             │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ ADK Agents (backend/agents/)                                        │    │
+│  │ • SpatialIntelligenceAgent — site selection scoring                 │    │
+│  │ • GeochemistAgent — safety analysis, CO₂ projection                 │    │
+│  │ Fallback chain: Gemini 2.0 Flash → Ollama/Gemma4 → Rule-based       │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼ (optional)
+                    ┌───────────────────────────────────┐
+                    │ Julia / Oceananigans.jl + CUDA    │
+                    │ (GPU LES plume simulation)        │
+                    └───────────────────────────────────┘
 ```
 
+### Three-Mode UI System
+1. **Global Intelligence (Mode 1)**: Pacific-centered view with CalCOFI oceanographic data, OAE zone scoring, MPA overlays, and AI-recommended deployment zones via `/discover`
+2. **Mission Control (Mode 2)**: Localized simulation view with 2D heatmap, 3D isosurface visualization, safety analysis, and impact metrics
+3. **Route Planning (Mode 3)**: Click-to-add waypoints, route LineString layer, per-segment CO₂ estimates, AIS vessel traffic overlay
+
 ### Data Flow
-1. Frontend sends simulation params to `POST /simulate`
-2. Backend runs Julia subprocess OR returns mock data from `data/mock/`
-3. Frontend renders alkalinity heatmap on Mapbox
-4. User clicks "Analyze" → `POST /analyze` → Gemma 2 safety assessment
+1. **Mode 1**: Frontend calls `GET /oceanographic` and `POST /discover` → renders CalCOFI stations + AI-recommended zones
+2. **Mode 2**: Frontend sends params to `POST /simulate` → Backend returns plume data with MRV hash → Frontend renders heatmap + Three.js isosurface → User clicks "Analyze" → `POST /analyze` → AI safety assessment
+3. **Mode 3**: Frontend calls `GET /traffic` → renders AIS vessels; user builds route → per-segment CO₂ estimates
 
 ### Key Files
-- `backend/main.py` - FastAPI server with /health, /simulate, /fleet, /analyze endpoints
-- `frontend/src/App.tsx` - Single-file React app with all components
+- `backend/main.py` - FastAPI server with all endpoints
+- `backend/agents/spatial_intelligence.py` - Site selection scoring agent
+- `backend/agents/geochemist.py` - Safety analysis agent with function calling
+- `backend/agents/base.py` - ADK agent base class and helpers
+- `frontend/src/App.tsx` - React app with three-mode UI system
+- `frontend/src/ThreeLayer.ts` - Three.js Mapbox custom layer (isosurface bounding box, velocity arrows)
 - `julia/plume_simulator.jl` - Oceananigans.jl LES simulation (requires Julia + CUDA)
-- `data/mock/plume_simulation.json` - Pre-computed fallback data
+- `data/mock/plume_simulation.json` - Pre-computed fallback plume data
+- `data/mock/calcofi_stations.json` - CalCOFI oceanographic station data
+- `data/mrv_log.jsonl` - MRV cryptographic hash log
 
 ### Safety Thresholds (from OAE research)
 - Ω_aragonite > 30.0 → runaway carbonate precipitation (UNSAFE)
 - Total alkalinity > 3500 µmol/kg → olivine toxicity (UNSAFE)
 
+### MRV (Measurement, Reporting, Verification)
+Every simulation result is hashed (SHA-256) and logged to `data/mrv_log.jsonl` for tamper-evident carbon credit verification. The hash is displayed in the Impact Metrics overlay.
+
 ## Offline-First Design
 
 The platform must work without internet (ship at sea scenario):
 - Backend auto-detects Julia availability and falls back to mock data
-- AI analysis falls back to rule-based logic if Ollama unavailable
+- AI analysis falls back: ADK agent → Ollama/Gemma4 → rule-based logic
 - All external API data is mocked (MarineTraffic, CalCOFI)
 
 ## Environment Variables
 
 Frontend (`frontend/.env`):
 ```
-VITE_MAPBOX_TOKEN=your-code
+VITE_MAPBOX_TOKEN=your-token
 VITE_API_URL=http://localhost:8001  # optional
+```
+
+Backend (optional):
+```
+GOOGLE_API_KEY=your-key  # Enables Gemini 2.0 Flash in ADK agents
 ```
 
 ## gstack
