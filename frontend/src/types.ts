@@ -114,6 +114,7 @@ export interface DiscoveryZone {
   score: number
   reason: string
   mpa_conflict: boolean
+  name?: string
 }
 
 export interface GlobalHotspot {

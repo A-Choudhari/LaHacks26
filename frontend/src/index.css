@@ -1315,6 +1315,212 @@ header {
   flex-shrink: 0;
 }
 
+/* ── Route Planning — new UI ──────────────────────────── */
+
+.rp-tab-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 14px;
+  position: relative;
+}
+
+.rp-tab-btn {
+  padding: 7px 0;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.18s, background 0.18s;
+  position: relative;
+  z-index: 1;
+}
+
+.rp-tab-btn.active {
+  background: var(--border-strong);
+  color: var(--text-1);
+}
+
+.rp-compute-btn {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 200, 240, 0.35);
+  background: rgba(0, 200, 240, 0.07);
+  color: var(--deploy);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: background 0.18s, border-color 0.18s;
+  margin-bottom: 0;
+}
+
+.rp-compute-btn:hover:not(:disabled) {
+  background: rgba(0, 200, 240, 0.13);
+  border-color: rgba(0, 200, 240, 0.55);
+}
+
+.rp-compute-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.rp-compute-btn.loading {
+  border-color: rgba(0, 200, 240, 0.2);
+}
+
+.rp-compute-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 200, 240, 0.25);
+  border-top-color: var(--deploy);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Fleet route assignment cards */
+.rp-fleet-card {
+  padding: 11px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--deploy);
+  border-radius: 8px;
+}
+
+.rp-fleet-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.rp-fleet-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rp-fleet-name {
+  font-size: 12px;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-fleet-meta {
+  font-size: 10px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-fleet-sites {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.rp-fleet-site-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+}
+
+.rp-fleet-site-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+}
+
+.rp-fleet-site-name {
+  flex: 1;
+  color: var(--text-2);
+}
+
+.rp-fleet-site-score {
+  color: var(--success);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-fleet-co2 {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--success);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hotspot markers on map */
+.rp-hotspot-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 200, 240, 0.12);
+  border: 2px solid rgba(0, 200, 240, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(0, 200, 240, 0.3);
+}
+
+.rp-hotspot-letter {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--deploy);
+  z-index: 1;
+  line-height: 1;
+}
+
+.rp-hotspot-ring {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 200, 240, 0.25);
+  animation: hotspot-pulse 2s ease-out infinite;
+}
+
+@keyframes hotspot-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Right sidebar fleet summary row */
+.rp-fleet-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  margin-bottom: 5px;
+}
+
 /* ── MRV badge ────────────────────────────────────────── */
 
 .mrv-card {

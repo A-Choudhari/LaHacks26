@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -51,6 +52,7 @@ def _get_geochemist_agent():
         _geochemist_agent = GeochemistAgent()
     return _geochemist_agent
 
+<<<<<<< HEAD
 app = FastAPI(
     title="The Tiered Edge Fleet",
     description="Ocean Alkalinity Enhancement Simulation Platform",
@@ -71,6 +73,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+=======
+>>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
 # Paths
 PROJECT_ROOT = Path(__file__).parent.parent
 JULIA_SCRIPT = PROJECT_ROOT / "julia" / "plume_simulator.jl"
@@ -87,6 +91,38 @@ def is_julia_available() -> bool:
 
 JULIA_INSTALLED = is_julia_available()
 USE_MOCK = not JULIA_SCRIPT.exists() or not JULIA_INSTALLED
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Pre-cache all ocean datasets at startup so first requests are fast."""
+    import threading
+    def _warm():
+        try:
+            logger.info("Startup: pre-caching ocean data...")
+            refresh_all()
+            logger.info("Startup: ocean data cache ready")
+        except Exception as exc:
+            logger.warning(f"Startup cache warmup failed (non-fatal): {exc}")
+    threading.Thread(target=_warm, daemon=True).start()
+    yield
+
+
+app = FastAPI(
+    title="The Tiered Edge Fleet",
+    description="Ocean Alkalinity Enhancement Simulation Platform",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# CORS for React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class VesselParams(BaseModel):
@@ -846,6 +882,7 @@ class DiscoveryZone(BaseModel):
     score: float
     reason: str
     mpa_conflict: bool
+    name: Optional[str] = None
 
 
 @app.post("/discover", response_model=list[DiscoveryZone])
@@ -877,9 +914,12 @@ async def discover_zones():
             mpa_conflict=r.get("mpa_conflict", False),
         ))
 
-    # Return top 5 by score, filter out MPA conflicts
+    # Return top 5 by score, filter out MPA conflicts; assign alphabetic site names
     zones.sort(key=lambda z: z.score, reverse=True)
-    return [z for z in zones if not z.mpa_conflict][:5]
+    filtered = [z for z in zones if not z.mpa_conflict][:5]
+    for i, z in enumerate(filtered):
+        z.name = f"Site {chr(65 + i)}"
+    return filtered
 
 
 @app.get("/oceanographic")
