@@ -84,15 +84,22 @@ Tasks below are ordered for execution. Complete each group before moving to the 
 
 ---
 
+## Completed Infrastructure
+
+- [x] **Port fix** — `frontend/.env` corrected to `VITE_API_URL=http://localhost:8001` (was 8000, causing all API calls to fail)
+- [x] **ThreeLayer origin fix** — `SHIP_LNG/LAT` in `ThreeLayer.ts` corrected from downtown LA (-118.24, 34.05) → Pacific Guardian site (-119.50, 33.80); 3D overlay now renders over the actual ship deployment location
+- [x] **Backend startup pre-caching** — Added `lifespan` context manager that runs `refresh_all()` in a daemon thread on FastAPI startup; ocean data is hot before first request
+- [x] **Unified startup script** — `start.sh` launches Ollama+Gemma4, backend, Julia CUDA warmup, and frontend with port-ready checks; `./start.sh --stop` kills all; logs in `.logs/`
+- [x] **Route Planning AI redesign** — `RoutePlanning.tsx` rewritten; "AI Fleet" tab calls `/discover`, runs greedy nearest-neighbor hotspot assignment per ship, renders per-vessel colored route lines; "Manual" tab retains original waypoint UX
+- [x] **DiscoveryZone name field** — backend `/discover` endpoint now assigns `Site A/B/C…` names; frontend `DiscoveryZone` type updated with optional `name` field
+
+---
+
 ## Remaining Tasks
 
 ### 2D Section Cut (vertical cross-section matrix)
 **Priority:** LOW
-**Effort:** 2 hours
-**What:** Add a horizontal slider to the UI that selects a depth level `z`. Render a colored flat plane at that z-slice showing alkalinity concentration as a texture. Use `THREE.PlaneGeometry` with a `DataTexture` mapped from the 2D slice of `fields.alkalinity`.
-**Why:** Section cuts let judges see subsurface plume structure without needing full 3D navigation
-**Depends on:** ThreeLayer.ts (complete)
-**Status:** ✅ DONE — Added depth slider in Mission Control "3D Visualization" panel; `buildSectionCut()` renders a colored plane at the selected depth with alkalinity mapped to a gradient texture (blue→cyan→green→yellow→orange)
+**Status:** ✅ DONE — `buildSectionCut()` renders colored plane at selected depth with alkalinity texture (blue→cyan→green→yellow→orange)
 
 ### Demo script preparation
 **Priority:** HIGH
@@ -104,6 +111,21 @@ Tasks below are ordered for execution. Complete each group before moving to the 
 - **Google Gemma:** Show Gemma 2 safety assessment → agent function calls → CO₂ projection
 
 Include explicit fallback paths: if Julia fails → pre-computed data; if Ollama fails → rule-based text; if Mapbox fails → screenshot backup.
+**Status:** TODO
+
+### UI polish — Mission Control 3D view
+**Priority:** MEDIUM
+**What:** The 3D isosurface bounding box is now correctly anchored over the Pacific Guardian site, but the Z-axis orientation may still appear inverted depending on tilt. Validate that `rotationX = Math.PI / 2` produces the correct up-direction and the box sits above the ocean surface (not below). May need to flip `scale: (scale, -scale, scale)` Z component.
+**Status:** TODO — needs live browser testing
+
+### UI polish — Global Intelligence
+**Priority:** MEDIUM
+**What:** Discovery zone cards in right sidebar sometimes flash on rapid `/discover` calls. Add `AnimatePresence` key stabilization so cards don't re-stagger on re-fetch.
+**Status:** TODO
+
+### Route Planning — ETA and current-adjusted paths
+**Priority:** LOW
+**What:** Pull `/currents` data and weight route cost by headwind/headcurrent opposition. Show ETA per segment based on ship speed vs. current vector. Visual: show current arrows on route planning map.
 **Status:** TODO
 
 ---

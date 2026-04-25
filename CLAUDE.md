@@ -12,12 +12,21 @@ Judging tracks: Sustainability, ASUS Challenge, Arista Networks "Connect the Dot
 
 ## Development Commands
 
+### Quickstart (all-in-one)
+```bash
+./start.sh             # Start everything: Ollama, backend, Julia warmup, frontend
+./start.sh --no-julia  # Skip Julia CUDA warmup for faster cold start
+./start.sh --stop      # Kill all background processes
+```
+`start.sh` waits for each service to be port-ready before proceeding. Logs written to `.logs/`.
+
 ### Backend (FastAPI)
 ```bash
 cd backend
 source venv/bin/activate
 uvicorn main:app --port 8001 --reload
 ```
+On startup, `lifespan()` fires a daemon thread running `refresh_all()` to pre-cache all ocean data (SST, CalCOFI, chlorophyll, currents) before first request.
 
 ### Frontend (React + Vite)
 ```bash
@@ -136,16 +145,20 @@ frontend/src/
 - Header chip labels: `GPU ✓` / `GPU ✗` for Julia availability — NOT "Live/Mock" (that was misleading; simulation uses real CalCOFI data regardless of Julia)
 - Error boundary: `ErrorBoundary` class in `App.tsx` wraps `<main>` — catches render errors and displays them on-screen instead of a black page
 - ThreeLayer lazy import: `PlumeThreeLayer` is loaded via dynamic `import('../ThreeLayer')` inside `handleMapLoad` — never imported statically at app startup to prevent Three.js from blocking/crashing the initial render. `import type { PlumeThreeLayer }` used for the TypeScript type only.
+- **ThreeLayer origin**: `SHIP_LNG = -119.50`, `SHIP_LAT = 33.80` — must match the Pacific Guardian ship position. Previously was downtown LA coords (-118.24, 34.05) which rendered the 3D box ~100 km east of the ships on the map.
 
 ### Backend Key Files
-- `backend/main.py` - FastAPI server with all endpoints — CORS allows `localhost:3000` and `3001`
+- `backend/main.py` - FastAPI server with all endpoints — CORS allows `localhost:3000`, `3001`, `5173`. Has `lifespan()` for startup ocean data pre-caching.
+- `backend/data_fetcher.py` - Real NOAA ERDDAP fetchers (`fetch_sst`, `fetch_calcofi`, `fetch_chlorophyll`, `fetch_currents`, `refresh_all`) with 24-hour file cache in `data/real/`
 - `backend/agents/spatial_intelligence.py` - Site selection scoring agent
 - `backend/agents/geochemist.py` - Safety analysis agent with function calling
 - `backend/agents/base.py` - ADK agent base class and helpers
 - `julia/plume_simulator.jl` - Oceananigans.jl LES simulation (requires Julia + CUDA)
 - `data/mock/plume_simulation.json` - Pre-computed fallback plume data
 - `data/mock/calcofi_stations.json` - CalCOFI oceanographic station data (real data, local cache)
+- `data/real/` - Live-fetched NOAA data: `sst.json`, `calcofi.json`, `chlorophyll.json`, `currents.json`, `zone_scores.json`
 - `data/mrv_log.jsonl` - MRV cryptographic hash log
+- `start.sh` - Unified launcher: Ollama → backend → Julia warmup → frontend; `--stop` to kill all
 
 ### Live Data Sources
 - **NOAA ERDDAP jplMURSST41**: SST fetched via `fetch_ocean_state(lat, lon)` — `https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json`. 10-minute in-memory cache (`_ocean_state_cache`). Falls back to CalCOFI if unreachable.
@@ -254,13 +267,18 @@ SVG top-down vessel: hull path, superstructure rect, bow line, port/starboard ci
 - `fmt(n, dec)` helper: formats large numbers as `k` / `M`
 
 **RoutePlanning** (`pages/RoutePlanning.tsx`)
-- Three-panel: left (route controls) + map + right (AIS Traffic)
-- Hint card animates out when first waypoint placed
-- Undo Last removes last waypoint; Clear All removes all; individual waypoints removable by click
-- Route line: glow layer (14px blur) + dashed solid line (2.5px)
-- Waypoint markers: cyan circles with numbered labels, spring-animate in on placement
+- Three-panel: left (route controls) + map + right (AIS Traffic + fleet summary)
+- **Two tabs** via `.rp-tab-toggle` segmented control:
+  - **AI Fleet tab**: "Compute Optimal Routes" button → `POST /discover` (disabled/spinner while fetching) → greedy nearest-neighbor assignment of discovered hotspots to each ship → per-ship colored dashed route lines on map + fleet assignment cards in sidebar
+  - **Manual tab**: original click-to-add waypoints UX; Undo Last + Clear All; staggered segment cards with km + CO₂ per leg
+- Route optimization algorithm (`planFleetRoutes`): ships sorted; each gets nearest unassigned hotspot; last ship absorbs all remaining via TSP nearest-neighbor; waypoints start at ship position
+- Per-ship route colors: Pacific Guardian `#00c8f0` (cyan), Ocean Sentinel `#4ade80` (green), Reef Protector `#fbbf24` (amber); FALLBACK_COLORS array for additional ships
+- Hotspot markers: 28px pulsing cyan circles (`rp-hotspot-marker`) with alphabetic site labels (A/B/C...) and `rp-hotspot-ring` pulse animation; scale-spring in with staggered delay
+- Route lines per ship: glow layer (12px blur, 0.18 opacity) + dashed solid layer (2.5px, `[4, 2.5]` dash)
+- Right sidebar shows AIS traffic + per-ship fleet summary (color pip + ship name + sites + km + CO₂) after routes are computed
+- `POST /discover` returns zones with `name: "Site A"/"Site B"/...` (assigned in backend); `DiscoveryZone.name` is optional string
 - AIS traffic: SVG arrow markers on map, ship-card style in right sidebar with amber pip
-- Segment cards stagger in, total CO₂ shown in green summary row
+- Map center: `longitude: -119.8, latitude: 33.8, zoom: 7` (Pacific coast fleet area)
 
 ### New CSS Classes (Phase 3)
 | Class | Location | Purpose |
@@ -277,6 +295,40 @@ SVG top-down vessel: hull path, superstructure rect, bow line, port/starboard ci
 | `.impact-chemistry-row` | `index.css` | Key-value chemistry row |
 | `.impact-loading` | `index.css` | Loading/empty state in impact panel |
 
+### New CSS Classes (Route Planning AI Redesign)
+| Class | Location | Purpose |
+|---|---|---|
+| `.rp-tab-toggle` | `index.css` | 2-col segmented control (AI Fleet / Manual) |
+| `.rp-tab-btn` / `.rp-tab-btn.active` | `index.css` | Tab button; active state has filled bg |
+| `.rp-compute-btn` / `.rp-compute-btn.loading` | `index.css` | Cyan "Compute Optimal Routes" button; loading variant dims border |
+| `.rp-compute-spinner` | `index.css` | 12px spinning ring inside compute button |
+| `.rp-fleet-card` | `index.css` | Per-ship route assignment card with colored left border |
+| `.rp-fleet-header` | `index.css` | Pip + ship name + km meta row inside fleet card |
+| `.rp-fleet-pip` | `index.css` | 7px colored circle matching ship route color |
+| `.rp-fleet-name` | `index.css` | Ship name, colored, truncated |
+| `.rp-fleet-meta` | `index.css` | Distance in km, muted right-aligned |
+| `.rp-fleet-sites` | `index.css` | List of assigned hotspots inside fleet card |
+| `.rp-fleet-site-row` | `index.css` | Single hotspot row: dot + name + score% |
+| `.rp-fleet-site-dot` | `index.css` | 4px muted circle bullet |
+| `.rp-fleet-site-score` | `index.css` | Green score percentage |
+| `.rp-fleet-co2` | `index.css` | Green CO₂ estimate at bottom of card |
+| `.rp-hotspot-marker` | `index.css` | 28px pulsing cyan circle on map for discovered sites |
+| `.rp-hotspot-letter` | `index.css` | Alphabetic site label (A/B/C) inside marker |
+| `.rp-hotspot-ring` | `index.css` | Pulsing outer ring — `hotspot-pulse` keyframes (2s ease-out) |
+| `.rp-fleet-summary-row` | `index.css` | Compact route summary row in right sidebar |
+| `@keyframes spin` | `index.css` | 360° spinner for compute button loading state |
+| `@keyframes hotspot-pulse` | `index.css` | Scale 1→1.6, opacity 0.6→0 pulse for hotspot rings |
+
+### Backend Startup — Ocean Data Pre-Caching
+`main.py` uses a FastAPI `lifespan` async context manager (not deprecated `@app.on_event`). On startup, it spawns a daemon thread calling `data_fetcher.refresh_all()`, which fetches and writes:
+- `data/real/sst.json` — NOAA OISST v2.1 SST (12-hour cache)
+- `data/real/calcofi.json` — CalCOFI CTD stations (7-day cache)
+- `data/real/chlorophyll.json` — ERDDAP chlorophyll-a (24-hour cache)
+- `data/real/currents.json` — OSCAR surface currents (24-hour cache)
+- `data/real/zone_scores.json` — computed OAE zone suitability scores
+
+Cache staleness check: `_is_stale(path, max_age_hours)` compares file `mtime`. If not stale, the in-file cache is returned immediately. If unreachable, falls back to whatever is on disk. Each dataset has its own max-age.
+
 ### MRV (Measurement, Reporting, Verification)
 Every simulation result is hashed (SHA-256) and logged to `data/mrv_log.jsonl` for tamper-evident carbon credit verification. The hash is displayed in the Impact Metrics overlay.
 
@@ -291,9 +343,10 @@ The platform must work without internet (ship at sea scenario):
 
 Frontend (`frontend/.env`):
 ```
-VITE_MAPBOX_TOKEN=your-token
-VITE_API_URL=http://localhost:8001  # optional
+VITE_MAPBOX_TOKEN=pk.eyJ1IjoidHNyaXJhbSIsImEi...  # Mapbox GL token
+VITE_API_URL=http://localhost:8001                  # Must be 8001 — backend port
 ```
+**Critical**: `VITE_API_URL` must be `8001`. The Vite config proxies `/api` → `8001`, but direct `API_URL` calls (used throughout) bypass the proxy and hit this env var directly. Using `8000` silently breaks all simulation, fleet, and AI endpoints.
 
 Backend (optional):
 ```

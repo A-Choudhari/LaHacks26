@@ -1,9 +1,9 @@
 import * as THREE from 'three'
 import mapboxgl from 'mapbox-gl'
 
-// Ship origin for coordinate mapping
-const SHIP_LNG = -118.2437
-const SHIP_LAT = 34.0522
+// Ship origin — Pacific Guardian deployment site off Channel Islands
+const SHIP_LNG = -119.50
+const SHIP_LAT = 33.80
 
 // Ω_aragonite value above which we consider the plume "enhanced"
 const ARAGONITE_THRESHOLD = 4.5
