@@ -242,4 +242,5 @@ frontend/dist/
 *.swo
 
 # Data
-data/*
+data/real/
+data/mrv_log.jsonl
