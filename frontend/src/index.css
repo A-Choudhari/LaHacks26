@@ -2142,3 +2142,9 @@ header {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Route animation head-dot pulse ─────────── */
+@keyframes rp-head-pulse {
+  from { transform: scale(1);   opacity: 1;   }
+  to   { transform: scale(1.6); opacity: 0.6; }
+}

@@ -1,5 +1,7 @@
 """
 Fleet status endpoint for Arista "Connect the Dots" challenge.
+Ships are positioned at real California port berths so routes
+depart from land rather than open ocean.
 """
 
 from datetime import datetime
@@ -26,45 +28,44 @@ class ShipStatus(BaseModel):
 @router.get("/fleet", response_model=list[ShipStatus])
 async def get_fleet_status():
     """
-    Get status of all ships in the OAE fleet.
-    Positions are in open Pacific water (Santa Barbara Channel / SoCal Bight).
-    Includes heading + speed so the frontend can animate live movement.
+    OAE fleet berthed at real California port terminals.
+    Ships depart from port, transit to deployment zones, then return.
     """
     return [
         ShipStatus(
             ship_id="ship-001",
             name="Pacific Guardian",
-            # Santa Barbara Channel — open Pacific, deep water, OAE Zone Alpha
-            position={"lat": 33.80, "lon": -119.50},
+            # Port of Los Angeles — Berth 100, main channel, San Pedro
+            position={"lat": 33.7346, "lon": -118.2560},
             status="deploying",
             last_simulation=datetime.utcnow().isoformat() + "Z",
             co2_removed_tons=847.3,
             alkalinity_deployed_kg=12500.0,
-            heading=262.0,   # west-southwest along Channel
+            heading=247.0,   # outbound southwest toward open ocean
             speed_kn=6.2,
         ),
         ShipStatus(
             ship_id="ship-002",
             name="Ocean Sentinel",
-            # Offshore San Diego — open ocean, OAE Zone Beta corridor
-            position={"lat": 32.50, "lon": -119.20},
+            # Port of Long Beach — Pier J terminal, Middle Harbor
+            position={"lat": 33.7541, "lon": -118.2165},
             status="active",
             last_simulation=datetime.utcnow().isoformat() + "Z",
             co2_removed_tons=623.1,
             alkalinity_deployed_kg=9200.0,
-            heading=198.0,   # south-southwest transit
+            heading=215.0,   # outbound south-southwest
             speed_kn=9.4,
         ),
         ShipStatus(
             ship_id="ship-003",
             name="Reef Protector",
-            # Offshore Pt. Conception — far offshore, standby
-            position={"lat": 35.10, "lon": -121.90},
+            # Port of San Diego — National City Marine Terminal, Pier 26
+            position={"lat": 32.6967, "lon": -117.1319},
             status="idle",
             last_simulation=None,
             co2_removed_tons=189.6,
             alkalinity_deployed_kg=2800.0,
-            heading=90.0,    # drifting east on current
-            speed_kn=1.1,
+            heading=270.0,   # ready to depart west
+            speed_kn=0.0,
         ),
     ]

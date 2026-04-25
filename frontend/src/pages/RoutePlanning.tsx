@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import Map, { Source, Layer, Marker } from 'react-map-gl'
 import { motion, AnimatePresence } from 'framer-motion'
 import { API_URL, MAPBOX_TOKEN, fadeUp, staggerList } from '../constants'
@@ -39,8 +39,58 @@ function haversineKm(a: { lat: number; lon: number }, b: { lat: number; lon: num
 }
 
 // Greedy nearest-neighbor assignment: assign ships to hotspots, then TSP-order each ship's stops
-function planFleetRoutes(ships: ShipStatus[], zones: DiscoveryZone[]): FleetRoute[] {
+// Smoothly trim a route to `progress` (0–1) along its total length.
+// Returns [lon, lat] pairs ready for GeoJSON coordinates.
+function trimRoute(
+  waypoints: { lat: number; lon: number }[],
+  progress: number,
+): [number, number][] {
+  if (waypoints.length < 2) return waypoints.map(w => [w.lon, w.lat])
+  if (progress <= 0) return [[waypoints[0].lon, waypoints[0].lat]]
+  if (progress >= 1) return waypoints.map(w => [w.lon, w.lat])
+
+  // Cumulative Euclidean distances (fast enough for a handful of waypoints)
+  const dists: number[] = [0]
+  for (let i = 1; i < waypoints.length; i++) {
+    const dx = waypoints[i].lon - waypoints[i - 1].lon
+    const dy = waypoints[i].lat - waypoints[i - 1].lat
+    dists.push(dists[i - 1] + Math.sqrt(dx * dx + dy * dy))
+  }
+  const total  = dists[dists.length - 1]
+  const target = total * progress
+
+  const coords: [number, number][] = [[waypoints[0].lon, waypoints[0].lat]]
+  for (let i = 1; i < waypoints.length; i++) {
+    if (dists[i] <= target) {
+      coords.push([waypoints[i].lon, waypoints[i].lat])
+    } else {
+      const t = (target - dists[i - 1]) / (dists[i] - dists[i - 1])
+      coords.push([
+        waypoints[i - 1].lon + (waypoints[i].lon - waypoints[i - 1].lon) * t,
+        waypoints[i - 1].lat + (waypoints[i].lat - waypoints[i - 1].lat) * t,
+      ])
+      break
+    }
+  }
+  return coords
+}
+
+// Ease-in-out cubic
+function easeInOut(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
+}
+
+type LocalPositions = Record<string, { lat: number; lon: number }>
+
+function planFleetRoutes(
+  ships: ShipStatus[],
+  zones: DiscoveryZone[],
+  localPos: LocalPositions = {},
+): FleetRoute[] {
   if (!ships.length || !zones.length) return []
+
+  // Use dragged position if available, else ship's server position
+  const pos = (ship: ShipStatus) => localPos[ship.ship_id] ?? ship.position
 
   const unassigned = [...zones]
   const routes: FleetRoute[] = []
@@ -52,7 +102,7 @@ function planFleetRoutes(ships: ShipStatus[], zones: DiscoveryZone[]): FleetRout
     let bestJ = 0
     let bestDist = Infinity
     unassigned.forEach((z, j) => {
-      const d = haversineKm(ship.position, z)
+      const d = haversineKm(pos(ship), z)
       if (d < bestDist) { bestDist = d; bestJ = j }
     })
 
@@ -74,8 +124,9 @@ function planFleetRoutes(ships: ShipStatus[], zones: DiscoveryZone[]): FleetRout
     }
 
     const color = SHIP_COLORS[ship.name] || FALLBACK_COLORS[si % FALLBACK_COLORS.length]
+    const origin = pos(ship)
     const waypoints = [
-      { lat: ship.position.lat, lon: ship.position.lon, label: ship.name },
+      { lat: origin.lat, lon: origin.lon, label: ship.name },
       ...assigned.map(z => ({ lat: z.lat, lon: z.lon, label: z.name ?? 'Site' })),
     ]
     const totalKm = waypoints.slice(1).reduce((sum, wp, i) => sum + haversineKm(waypoints[i], wp), 0)
@@ -91,6 +142,34 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
   const [hotspots, setHotspots] = useState<DiscoveryZone[]>([])
   const [isDiscovering, setIsDiscovering] = useState(false)
   const [routesComputed, setRoutesComputed] = useState(false)
+
+  // Local ship position overrides (set when user drags a ship)
+  const [localPositions, setLocalPositions] = useState<LocalPositions>({})
+
+  // Route draw animation: 0 = not started, 1 = fully drawn
+  const [animProgress, setAnimProgress] = useState(0)
+  const rafRef  = useRef<number>()
+  const t0Ref   = useRef<number>()
+
+  const ANIM_DURATION = 3800 // ms for the full draw
+
+  // Kick off animation whenever routes are freshly computed
+  useEffect(() => {
+    if (!routesComputed) { setAnimProgress(0); return }
+    setAnimProgress(0)
+    t0Ref.current = undefined
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+
+    const tick = (now: number) => {
+      if (!t0Ref.current) t0Ref.current = now
+      const raw = Math.min((now - t0Ref.current) / ANIM_DURATION, 1)
+      setAnimProgress(easeInOut(raw))
+      if (raw < 1) rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routesComputed, hotspots])
 
   const computeRoutes = async () => {
     setIsDiscovering(true)
@@ -114,7 +193,16 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
 
   const ships = fleet || []
   const zones = hotspots
-  const routes = planFleetRoutes(ships, zones)
+  const routes = planFleetRoutes(ships, zones, localPositions)
+
+  // Per-ship stagger: ship i starts animating after i × 18% of ANIM_DURATION
+  const STAGGER = 0.18
+  const SHIP_WINDOW = 1 - STAGGER * (Math.max(ships.length - 1, 0))
+  const shipProgress = (i: number) => {
+    const start = i * STAGGER
+    const raw   = Math.max(0, Math.min(1, (animProgress - start) / Math.max(SHIP_WINDOW, 0.1)))
+    return easeInOut(raw)
+  }
 
   // Manual route stats
   const manualKm =
@@ -414,32 +502,48 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
         >
           <MPAOverlay />
 
-          {/* Fleet route lines — one per ship */}
-          {routes.map(route => {
+          {/* Fleet route lines — animated draw using trimRoute + shipProgress */}
+          {routes.map((route, i) => {
+            const prog   = shipProgress(i)
+            const coords = trimRoute(route.waypoints, prog)
             const geojson = {
               type: 'FeatureCollection' as const,
-              features: [{
+              features: coords.length >= 2 ? [{
                 type: 'Feature' as const,
                 properties: {},
-                geometry: {
-                  type: 'LineString' as const,
-                  coordinates: route.waypoints.map(w => [w.lon, w.lat]),
-                },
-              }],
+                geometry: { type: 'LineString' as const, coordinates: coords },
+              }] : [],
             }
+            // Leading-edge head position (tip of animated line)
+            const head = coords[coords.length - 1]
+
             return (
-              <Source key={route.ship.ship_id} id={`route-${route.ship.ship_id}`} type="geojson" data={geojson}>
-                <Layer
-                  id={`route-${route.ship.ship_id}-glow`}
-                  type="line"
-                  paint={{ 'line-color': route.color, 'line-width': 12, 'line-blur': 10, 'line-opacity': 0.18 }}
-                />
-                <Layer
-                  id={`route-${route.ship.ship_id}-line`}
-                  type="line"
-                  paint={{ 'line-color': route.color, 'line-width': 2.5, 'line-dasharray': [4, 2.5] }}
-                />
-              </Source>
+              <React.Fragment key={route.ship.ship_id}>
+                <Source id={`route-${route.ship.ship_id}`} type="geojson" data={geojson}>
+                  <Layer
+                    id={`route-${route.ship.ship_id}-glow`}
+                    type="line"
+                    paint={{ 'line-color': route.color, 'line-width': 14, 'line-blur': 10, 'line-opacity': 0.18 }}
+                  />
+                  <Layer
+                    id={`route-${route.ship.ship_id}-line`}
+                    type="line"
+                    paint={{ 'line-color': route.color, 'line-width': 2.5, 'line-dasharray': [4, 2.5] }}
+                  />
+                </Source>
+
+                {/* Glowing head dot at the tip of the animated route */}
+                {prog > 0 && prog < 1 && head && (
+                  <Marker longitude={head[0]} latitude={head[1]} anchor="center">
+                    <div style={{
+                      width: 10, height: 10, borderRadius: '50%',
+                      background: route.color,
+                      boxShadow: `0 0 0 3px ${route.color}44, 0 0 14px ${route.color}`,
+                      animation: 'rp-head-pulse 0.8s ease-in-out infinite alternate',
+                    }} />
+                  </Marker>
+                )}
+              </React.Fragment>
             )
           })}
 
@@ -478,19 +582,39 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
             </Marker>
           ))}
 
-          {/* Fleet ships */}
-          {ships.map(ship => (
-            <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat} anchor="center">
-              <ShipMarker
-                status={ship.status}
-                name={ship.name}
-                lat={ship.position.lat}
-                lon={ship.position.lon}
-                co2={ship.co2_removed_tons}
-                heading={ship.heading}
-              />
-            </Marker>
-          ))}
+          {/* Fleet ships — draggable to reposition departure port */}
+          {ships.map(ship => {
+            const pos = localPositions[ship.ship_id] ?? ship.position
+            return (
+              <Marker
+                key={ship.ship_id}
+                longitude={pos.lon}
+                latitude={pos.lat}
+                anchor="center"
+                draggable
+                onDrag={e => setLocalPositions(prev => ({
+                  ...prev,
+                  [ship.ship_id]: { lat: e.lngLat.lat, lon: e.lngLat.lng },
+                }))}
+                onDragEnd={() => {
+                  // Reset computed routes when a ship is moved
+                  setRoutesComputed(false)
+                  setHotspots([])
+                }}
+              >
+                <div style={{ cursor: 'grab' }} title={`${ship.name} — drag to reposition`}>
+                  <ShipMarker
+                    status={ship.status}
+                    name={ship.name}
+                    lat={pos.lat}
+                    lon={pos.lon}
+                    co2={ship.co2_removed_tons}
+                    heading={ship.heading}
+                  />
+                </div>
+              </Marker>
+            )
+          })}
 
           {/* Manual waypoints */}
           {tab === 'manual' && manualWaypoints.map((wp, i) => (
