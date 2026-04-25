@@ -114,4 +114,13 @@ export interface DiscoveryZone {
   score: number
   reason: string
   mpa_conflict: boolean
+  name?: string
+}
+
+export interface GlobalHotspot {
+  lat: number
+  lon: number
+  sst_c: number
+  wind_m_s: number | null   // real QuikSCAT/ASCAT wind speed (m/s), null if unavailable
+  oae_score: number         // composite: SST×0.30 + Wind×0.30 + Lat×0.25 + Upwelling bonus
 }

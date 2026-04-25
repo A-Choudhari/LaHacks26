@@ -3,18 +3,36 @@ FastAPI backend for The Tiered Edge Fleet
 OAE Simulation Platform
 """
 
+from dotenv import load_dotenv
+load_dotenv()  # loads backend/.env into os.environ before anything else
+
 import json
 import hashlib
 import subprocess
 import tempfile
 import asyncio
+import time
+import math
+import logging
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# Real ocean data fetcher
+from data_fetcher import (
+    fetch_calcofi, fetch_sst, fetch_chlorophyll,
+    fetch_currents, compute_oae_scores, fetch_global_oae_hotspots,
+    _load, refresh_all
+)
+# Real-time AIS vessel stream
+import ais_stream
+
+logger = logging.getLogger(__name__)
 
 # ADK agents (imported lazily to avoid startup crash if deps are broken)
 _spatial_agent = None
@@ -34,11 +52,17 @@ def _get_geochemist_agent():
         _geochemist_agent = GeochemistAgent()
     return _geochemist_agent
 
+<<<<<<< HEAD
 app = FastAPI(
     title="The Tiered Edge Fleet",
     description="Ocean Alkalinity Enhancement Simulation Platform",
     version="0.1.0"
 )
+
+@app.on_event("startup")
+async def _startup():
+    """Start real-time AIS stream in background on server boot."""
+    asyncio.create_task(ais_stream.stream_forever())
 
 # CORS for React frontend
 app.add_middleware(
@@ -49,10 +73,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+=======
+>>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
 # Paths
 PROJECT_ROOT = Path(__file__).parent.parent
 JULIA_SCRIPT = PROJECT_ROOT / "julia" / "plume_simulator.jl"
 MOCK_DATA_DIR = PROJECT_ROOT / "data" / "mock"
+REAL_DATA_DIR = PROJECT_ROOT / "data" / "real"
 
 # Check if Julia is actually installed
 def is_julia_available() -> bool:
@@ -64,6 +91,38 @@ def is_julia_available() -> bool:
 
 JULIA_INSTALLED = is_julia_available()
 USE_MOCK = not JULIA_SCRIPT.exists() or not JULIA_INSTALLED
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Pre-cache all ocean datasets at startup so first requests are fast."""
+    import threading
+    def _warm():
+        try:
+            logger.info("Startup: pre-caching ocean data...")
+            refresh_all()
+            logger.info("Startup: ocean data cache ready")
+        except Exception as exc:
+            logger.warning(f"Startup cache warmup failed (non-fatal): {exc}")
+    threading.Thread(target=_warm, daemon=True).start()
+    yield
+
+
+app = FastAPI(
+    title="The Tiered Edge Fleet",
+    description="Ocean Alkalinity Enhancement Simulation Platform",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# CORS for React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class VesselParams(BaseModel):
@@ -117,6 +176,8 @@ class HealthResponse(BaseModel):
     julia_available: bool
     mock_data_available: bool
     ollama_available: bool
+    ais_live: bool = False
+    ais_vessels: int = 0
 
 
 def compute_mrv_hash(result: "SimulationResult") -> str:
@@ -168,7 +229,9 @@ async def health_check():
         status="ok",
         julia_available=julia_ok,
         mock_data_available=mock_ok,
-        ollama_available=ollama_ok
+        ollama_available=ollama_ok,
+        ais_live=ais_stream.is_connected(),
+        ais_vessels=ais_stream.vessel_count(),
     )
 
 
@@ -819,6 +882,7 @@ class DiscoveryZone(BaseModel):
     score: float
     reason: str
     mpa_conflict: bool
+    name: Optional[str] = None
 
 
 @app.post("/discover", response_model=list[DiscoveryZone])
@@ -850,22 +914,81 @@ async def discover_zones():
             mpa_conflict=r.get("mpa_conflict", False),
         ))
 
-    # Return top 5 by score, filter out MPA conflicts
+    # Return top 5 by score, filter out MPA conflicts; assign alphabetic site names
     zones.sort(key=lambda z: z.score, reverse=True)
-    return [z for z in zones if not z.mpa_conflict][:5]
+    filtered = [z for z in zones if not z.mpa_conflict][:5]
+    for i, z in enumerate(filtered):
+        z.name = f"Site {chr(65 + i)}"
+    return filtered
 
 
 @app.get("/oceanographic")
-async def get_oceanographic_data():
+async def get_oceanographic_data(background_tasks: BackgroundTasks):
     """
-    CalCOFI-style oceanographic station data for Mode 1 Global Intelligence.
-    Loads from mock file; in production would query calcofi.io/api.
+    Real CalCOFI CTD hydrographic data from NOAA ERDDAP.
+    Dataset: erdCalCOFINOAAhydros — temperature, salinity, dissolved oxygen.
+    Falls back to mock data if ERDDAP is unavailable.
     """
+    stations = fetch_calcofi()
+    if stations:
+        # Trigger background refresh if cache is getting stale
+        background_tasks.add_task(fetch_calcofi)
+        return stations
+    # Fallback to mock
     mock_file = MOCK_DATA_DIR / "calcofi_stations.json"
     if mock_file.exists():
         with open(mock_file) as f:
             return json.load(f)
     return []
+
+
+@app.get("/sst")
+async def get_sea_surface_temperature():
+    """
+    Real NOAA OISST v2.1 sea surface temperature for CA coastal waters.
+    Dataset: ncdcOisst21Agg_LonPM180 — 0.25° resolution, near-daily updates.
+    """
+    return fetch_sst()
+
+
+@app.get("/currents")
+async def get_ocean_currents():
+    """
+    Real OSCAR 1/3° surface current data (u/v vectors).
+    Dataset: jplOscar — climatological reference for CA coastal current patterns.
+    Returns vectors with speed and direction for route optimization.
+    """
+    return fetch_currents()
+
+
+@app.get("/global-hotspots")
+async def get_global_hotspots():
+    """
+    Real global OAE suitability hotspots computed from NOAA OISST (8° coarse grid).
+    Score = 55% SST (cooler = better CO2 solubility) + 45% latitude band
+    (mid-latitudes 30-60° optimal for wind mixing, away from biologically hot tropics).
+    Returns 400+ points covering the global ocean.
+    """
+    return fetch_global_oae_hotspots()
+
+
+@app.get("/zone-scores")
+async def get_zone_scores():
+    """
+    Real OAE zone suitability scores computed from ERDDAP SST + chlorophyll.
+    Score components: SST (60% — cooler = better CO2 solubility) +
+                      Chlorophyll (40% — lower = less biotic interference).
+    """
+    cached = _load("zone_scores")
+    if cached:
+        return cached
+    # Compute fresh
+    sst = fetch_sst()
+    chl = fetch_chlorophyll()
+    if sst and chl:
+        scores = compute_oae_scores(sst, chl)
+        return scores
+    return {}
 
 
 class VesselTraffic(BaseModel):
@@ -878,24 +1001,80 @@ class VesselTraffic(BaseModel):
     speed_kn: float
 
 
+# ── Live AIS Vessel Simulation ─────────────────────────────────────────────────
+
+_vessel_state: dict = {"vessels": [], "last_update": 0.0}
+
+
+def _load_base_vessels() -> list[dict]:
+    """Load real AIS vessel data (curated from NOAA AIS 2024-01-01, CA coastal waters)."""
+    # Prefer real data, fall back to mock
+    for ais_file in [REAL_DATA_DIR / "ais_vessels.json", MOCK_DATA_DIR / "ais_vessels.json"]:
+        if ais_file.exists():
+            with open(ais_file) as f:
+                return json.load(f)
+    return []
+
+
+def _simulate_vessel_movement(vessel: dict, elapsed_seconds: float) -> dict:
+    """
+    Move vessel along heading at speed.
+    1 knot ≈ 1.852 km/h ≈ 0.0003 degrees/second at ~34°N latitude.
+    """
+    # Convert speed from knots to degrees/second (approximate)
+    speed_deg_per_sec = vessel["speed_kn"] * 0.0003 / 3600
+    distance = speed_deg_per_sec * elapsed_seconds
+
+    heading_rad = math.radians(vessel["heading"])
+    new_lat = vessel["lat"] + distance * math.cos(heading_rad)
+    new_lon = vessel["lon"] + distance * math.sin(heading_rad)
+
+    # Boundary check - reverse heading if out of Southern California area
+    if new_lat < 33.0 or new_lat > 34.5 or new_lon < -119.5 or new_lon > -117.5:
+        vessel["heading"] = (vessel["heading"] + 180) % 360
+
+    vessel["lat"] = new_lat
+    vessel["lon"] = new_lon
+    return vessel
+
+
 @app.get("/traffic", response_model=list[VesselTraffic])
 async def get_vessel_traffic():
     """
-    Mock AIS vessel traffic near the OAE deployment zone.
-    Used in Route Planning mode to show conflict avoidance.
+    Real-time global AIS vessel traffic via aisstream.io WebSocket.
+    Falls back to simulated movement of curated NOAA AIS vessels when
+    AISSTREAM_API_KEY is not set or the stream is disconnected.
+
+    Live mode: returns all vessels seen in the last 30 minutes globally.
+    Fallback mode: returns 12 curated vessels from NOAA AIS 2024 CA data
+                   with simulated position updates based on heading/speed.
     """
-    return [
-        VesselTraffic(vessel_id="ais-001", name="Ever Given II", vessel_type="container",
-                      lat=34.12, lon=-119.05, heading=112.0, speed_kn=14.2),
-        VesselTraffic(vessel_id="ais-002", name="Nordic Spirit", vessel_type="tanker",
-                      lat=33.65, lon=-118.80, heading=285.0, speed_kn=11.8),
-        VesselTraffic(vessel_id="ais-003", name="Pacific Pioneer", vessel_type="bulk_carrier",
-                      lat=34.25, lon=-118.50, heading=200.0, speed_kn=9.5),
-        VesselTraffic(vessel_id="ais-004", name="Sea Hawk", vessel_type="fishing",
-                      lat=33.90, lon=-119.30, heading=045.0, speed_kn=6.1),
-        VesselTraffic(vessel_id="ais-005", name="Catalina Express", vessel_type="ferry",
-                      lat=33.75, lon=-118.35, heading=230.0, speed_kn=22.0),
-    ]
+    # Prefer live AIS stream
+    live = ais_stream.get_vessels()
+    if live:
+        return [VesselTraffic(**{k: v for k, v in vessel.items()
+                                 if k in VesselTraffic.model_fields})
+                for vessel in live]
+
+    # Fallback: curated data with simulated movement
+    global _vessel_state
+    now = time.time()
+
+    if not _vessel_state["vessels"] or now - _vessel_state["last_update"] > 300:
+        _vessel_state["vessels"] = _load_base_vessels()
+        _vessel_state["last_update"] = now
+        return [VesselTraffic(**{k: v for k, v in vessel.items()
+                                 if k in VesselTraffic.model_fields})
+                for vessel in _vessel_state["vessels"]]
+
+    elapsed = now - _vessel_state["last_update"]
+    _vessel_state["last_update"] = now
+    for vessel in _vessel_state["vessels"]:
+        _simulate_vessel_movement(vessel, elapsed)
+
+    return [VesselTraffic(**{k: v for k, v in vessel.items()
+                             if k in VesselTraffic.model_fields})
+            for vessel in _vessel_state["vessels"]]
 
 
 # ── Hotspot Impact Analysis ───────────────────────────────────────────────────

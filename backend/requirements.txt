@@ -8,6 +8,11 @@ pydantic>=2.5.0
 # Utilities
 python-multipart>=0.0.6
 httpx>=0.26.0
+requests>=2.31.0
+
+# Real-time AIS vessel stream (aisstream.io WebSocket)
+websockets>=12.0
+websocket-client>=1.7.0
 
 # For mock data generation
 numpy>=1.26.0
