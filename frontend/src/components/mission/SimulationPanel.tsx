@@ -64,7 +64,7 @@ export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLa
       </motion.button>
 
       {onToggleRunning && (
-        <div className="sim-controls">
+        <div className="sim-controls" data-tour="mc-sim-controls">
           <motion.button
             className={`sim-ctrl-btn ${isRunning ? 'pause' : 'resume'}`}
             onClick={onToggleRunning}

@@ -146,7 +146,7 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
           <div className="panel-label">Route Planner</div>
 
           {/* Tab toggle */}
-          <div className="rp-tab-toggle">
+          <div className="rp-tab-toggle" data-tour="rp-tabs">
             <button
               className={`rp-tab-btn${tab === 'fleet' ? ' active' : ''}`}
               onClick={() => setTab('fleet')}
@@ -172,6 +172,7 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               >
                 <motion.button
+                  data-tour="rp-compute"
                   className={`rp-compute-btn${isDiscovering ? ' loading' : ''}`}
                   onClick={() => computeRoutes()}
                   disabled={isDiscovering}
@@ -403,7 +404,7 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
       </motion.div>
 
       {/* ── Map ── */}
-      <div className="map-container">
+      <div className="map-container" data-tour="rp-map">
         <Map
           initialViewState={{ longitude: -119.8, latitude: 33.8, zoom: 7 }}
           style={{ width: '100%', height: '100%' }}
@@ -567,6 +568,7 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
 
       {/* ── Right sidebar — AIS Traffic ── */}
       <motion.div
+        data-tour="rp-ais"
         className="sidebar sidebar-right"
         initial={{ x: 280, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
