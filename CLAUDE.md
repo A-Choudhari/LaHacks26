@@ -52,7 +52,7 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 │  ┌────────────────────────────────────────────────────────┐               │
 │  │         Mapbox GL + Three.js (ThreeLayer.ts)           │               │
 │  │  • 2D Heatmap • 3D Isosurface BBox • Velocity Arrows   │               │
-│  │  • MPA Overlays • CalCOFI Stations • AIS Traffic       │               │
+│  │  • 2D Section Cut (depth slider) • MPA Overlays        │               │
 │  └────────────────────────────────────────────────────────┘               │
 └─────────────────────────────────┬──────────────────────────────────────────┘
                                   │
@@ -90,7 +90,7 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 
 ### Three-Mode UI System
 1. **Global Intelligence (Mode 1)**: Pacific-centered view with CalCOFI oceanographic data, OAE zone scoring, MPA overlays, and AI-recommended deployment zones via `/discover`
-2. **Mission Control (Mode 2)**: Localized simulation view with 2D heatmap, 3D isosurface visualization, safety analysis, and impact metrics
+2. **Mission Control (Mode 2)**: Localized simulation view with 2D heatmap, 3D isosurface visualization, 2D section cut (depth-adjustable cross-section), safety analysis, and impact metrics
 3. **Route Planning (Mode 3)**: Click-to-add waypoints, route LineString layer, per-segment CO₂ estimates, AIS vessel traffic overlay
 
 ### Data Flow

@@ -91,7 +91,7 @@ Tasks below are ordered for execution. Complete each group before moving to the 
 **What:** Add a horizontal slider to the UI that selects a depth level `z`. Render a colored flat plane at that z-slice showing alkalinity concentration as a texture. Use `THREE.PlaneGeometry` with a `DataTexture` mapped from the 2D slice of `fields.alkalinity`.
 **Why:** Section cuts let judges see subsurface plume structure without needing full 3D navigation
 **Depends on:** ThreeLayer.ts (complete)
-**Status:** TODO
+**Status:** ✅ DONE — Added depth slider in Mission Control "3D Visualization" panel; `buildSectionCut()` renders a colored plane at the selected depth with alkalinity mapped to a gradient texture (blue→cyan→green→yellow→orange)
 
 ### Demo script preparation
 **Priority:** HIGH
