@@ -33,8 +33,8 @@ npm run build    # Production build
 
 ### Ollama/Gemma (AI analysis)
 ```bash
-ollama serve                    # Terminal 1
-ollama pull gemma2              # Terminal 2 (first time only)
+ollama serve                        # Terminal 1
+ollama run gemma4:e4b               # Terminal 2 (first time — downloads and runs the 4B model)
 ```
 
 ## Architecture

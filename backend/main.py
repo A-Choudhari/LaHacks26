@@ -129,24 +129,24 @@ def load_mock_data() -> dict:
         with open(mock_file) as f:
             return json.load(f)
 
-    # Generate minimal mock data if file doesn't exist
+    # Generate fallback mock data if file doesn't exist.
+    # alkalinity and aragonite_saturation are 2D [ny][nx] surface slices
+    # so the frontend heatmap can iterate them directly.
     import numpy as np
 
-    # Create a simple 3D gaussian plume
-    nx, ny, nz = 50, 50, 25
+    nx, ny = 50, 50
     x = np.linspace(0, 500, nx)
     y = np.linspace(-250, 250, ny)
-    z = np.linspace(-50, 0, nz)
+    z = np.linspace(-50, 0, 25)
 
-    # 3D meshgrid for plume calculation
-    X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
+    X, Y = np.meshgrid(x, y)  # Y is outer (row), X is inner (col) → [ny][nx]
 
-    # Gaussian plume spreading from origin
-    sigma_x, sigma_y, sigma_z = 100, 50, 10
-    alkalinity = 2300 + 500 * np.exp(
-        -(X**2 / (2*sigma_x**2) + Y**2 / (2*sigma_y**2) + (Z+25)**2 / (2*sigma_z**2))
+    # Directional plume: ship moves east, plume elongates along x-axis
+    sigma_x, sigma_y = 120, 60
+    alkalinity_2d = 2300 + 900 * np.exp(
+        -((X - 150)**2 / (2 * sigma_x**2) + Y**2 / (2 * sigma_y**2))
     )
-    aragonite = 3.0 + (alkalinity - 2300) / 100
+    aragonite_2d = 3.0 + (alkalinity_2d - 2300) / 80
 
     return {
         "status": "safe",
@@ -157,13 +157,13 @@ def load_mock_data() -> dict:
             "z": z.tolist()
         },
         "fields": {
-            "alkalinity": alkalinity.tolist(),
-            "aragonite_saturation": aragonite.tolist()
+            "alkalinity": alkalinity_2d.tolist(),       # [ny][nx] — heatmap-ready
+            "aragonite_saturation": aragonite_2d.tolist()
         },
         "summary": {
-            "max_aragonite_saturation": float(aragonite.max()),
-            "max_total_alkalinity": float(alkalinity.max()),
-            "grid_size": [nx, ny, nz],
+            "max_aragonite_saturation": float(aragonite_2d.max()),
+            "max_total_alkalinity": float(alkalinity_2d.max()),
+            "grid_size": [nx, ny, 25],
             "simulation_duration_s": 3600
         },
         "params": {
@@ -368,7 +368,7 @@ Using the standard OAE efficiency ratio (approximately 0.8 mol CO2 removed per m
 Calculate and explain the projected CO2 removal over 10 years. Give a specific number in tons."""
 
 
-async def query_ollama(prompt: str, model: str = "gemma2") -> str:
+async def query_ollama(prompt: str, model: str = "gemma4:e4b") -> str:
     """Query Ollama API with a prompt"""
     import httpx
 
@@ -445,7 +445,7 @@ async def analyze_simulation(request: AnalysisRequest):
         co2_task = query_ollama(co2_prompt)
 
         safety_text, co2_text = await asyncio.gather(safety_task, co2_task)
-        model_used = "gemma2"
+        model_used = "gemma4:e4b"
     else:
         # Fallback to rule-based analysis
         is_safe = max_aragonite <= 30.0 and max_alkalinity <= 3500
