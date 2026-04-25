@@ -56,12 +56,51 @@ React + Mapbox (3000) ←→ FastAPI (8001) ←→ Julia/Oceananigans (optional)
 ### Key Files
 - `backend/main.py` - FastAPI server with /health, /simulate, /fleet, /analyze endpoints
 - `frontend/src/App.tsx` - Single-file React app with all components
+- `frontend/src/index.css` - All styles — design tokens live in `:root` at the top
+- `frontend/src/lib/utils.ts` - `cn()` helper for class merging (clsx + tailwind-merge)
 - `julia/plume_simulator.jl` - Oceananigans.jl LES simulation (requires Julia + CUDA)
 - `data/mock/plume_simulation.json` - Pre-computed fallback data
 
 ### Safety Thresholds (from OAE research)
 - Ω_aragonite > 30.0 → runaway carbonate precipitation (UNSAFE)
 - Total alkalinity > 3500 µmol/kg → olivine toxicity (UNSAFE)
+
+## UI Stack (phase:ui1)
+
+Installed in `frontend/`:
+- **Framer Motion** — all animations (`motion.*`, `AnimatePresence`, spring physics)
+- **Radix UI Slider** (`@radix-ui/react-slider`) — custom styled range inputs
+- **Tailwind CSS v4** + `@tailwindcss/postcss` — utility classes available but CSS variables are the primary styling approach
+- **clsx + tailwind-merge** — `cn()` utility at `src/lib/utils.ts`
+- **Radix UI** (tabs, select, tooltip, separator, progress) — installed, not yet wired
+
+### Design Tokens (in `frontend/src/index.css` `:root`)
+| Token | Value | Usage |
+|---|---|---|
+| `--bg` | `#0c0f14` | App background |
+| `--panel-bg` | `rgba(12,15,20,0.96)` | Sidebar + overlay panels |
+| `--accent` | `#ffffff` | Sliders, active states (white — minimal use) |
+| `--deploy` | `#00c8f0` | Deploying ship status only |
+| `--success` | `#4ade80` | Safe status, active ships |
+| `--danger` | `#f87171` | Unsafe status, MPA zones |
+| `--warning` | `#fbbf24` | Idle ships |
+| `--text-1/2/3` | light→muted grey | Heading / body / label hierarchy |
+
+### Animation Patterns
+- Sidebars slide in from edges on mount (`x: ±280 → 0`, spring)
+- Header staggers in element-by-element on load
+- Result/analysis cards fade+slide up with `AnimatePresence`
+- Ship cards stagger in with `0.07s` children delay
+- Feedstock segmented control: indicator slides with `x` spring (`stiffness:500, damping:38`)
+- Slider value number pops on change (`key={value}`, scale spring)
+- Online dot breathes with CSS `@keyframes dot-breathe`
+- Deploying ship markers pulse with CSS `@keyframes ring-out`
+
+### Component Patterns
+- **ParamSlider** — Radix Root/Track/Range/Thumb, animated value display
+- **FeedstockPicker** — segmented control with sliding `motion.div` indicator
+- **ShipMarker** — SVG top-down vessel with hull, superstructure, port/starboard lights
+- **MPAOverlay** — 3 organic blob polygons (Channel Islands, Point Dume, Santa Monica Bay) with glow + dotted border layers
 
 ## Offline-First Design
 
