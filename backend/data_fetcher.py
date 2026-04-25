@@ -294,8 +294,8 @@ def fetch_global_oae_hotspots(force: bool = False) -> list:
             logger.info(f"Global hotspots: using cache ({len(cached['hotspots'])} points)")
             return cached["hotspots"]
 
-    # 8° stride on a 0.25° grid = skip every 32 cells
-    STRIDE = 32
+    # 4° stride on a 0.25° grid = skip every 16 cells → ~1500 global points
+    STRIDE = 16
 
     for days_back in [90, 180, 365]:
         ref_date = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%dT00:00:00Z")
