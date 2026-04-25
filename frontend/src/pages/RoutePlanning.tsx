@@ -96,7 +96,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
     staleTime: 20000,
   })
 
-<<<<<<< HEAD
   // Convert vessels to GeoJSON once — GPU-rendered, handles 3000+ ships with zero lag
   const trafficGeoJSON = useMemo(() => ({
     type: 'FeatureCollection' as const,
@@ -120,20 +119,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
       geometry: { type: 'LineString' as const, coordinates: waypoints.map(w => [w.lon, w.lat]) },
     }] : [],
   }), [waypoints])
-=======
-  const {
-    data: hotspots,
-    isFetching: isDiscovering,
-    refetch: computeRoutes,
-    isFetched: routesComputed,
-  } = useQuery<DiscoveryZone[]>({
-    queryKey: ['route-hotspots'],
-    queryFn: () =>
-      fetch(`${API_URL}/discover`, { method: 'POST' }).then(r => r.json()),
-    enabled: false,
-    staleTime: 5 * 60 * 1000,
-  })
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
 
   const ships = fleet || []
   const zones = hotspots || []
@@ -152,10 +137,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
 
   return (
     <div className="mode-layout">
-<<<<<<< HEAD
-
-=======
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
       {/* ── Left sidebar ── */}
       <motion.div
         className="sidebar sidebar-left"
@@ -166,10 +147,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
         <div className="panel">
           <div className="panel-label">Route Planner</div>
 
-<<<<<<< HEAD
-          <AnimatePresence>
-            {waypoints.length === 0 && (
-=======
           {/* Tab toggle */}
           <div className="rp-tab-toggle">
             <button
@@ -189,13 +166,11 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
           {/* ── AI Fleet tab ── */}
           <AnimatePresence mode="wait">
             {tab === 'fleet' && (
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
               <motion.div
                 key="fleet"
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
-<<<<<<< HEAD
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               >
                 <div className="rp-hint-icon">+</div>
@@ -213,8 +188,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-=======
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               >
                 <motion.button
@@ -257,20 +230,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
                   )}
                 </AnimatePresence>
 
-<<<<<<< HEAD
-                <div className="rp-actions">
-                  <motion.button
-                    className="rp-btn-outline"
-                    onClick={() => setWaypoints(prev => prev.slice(0, -1))}
-                    whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.985 }}
-                  >Undo Last</motion.button>
-                  <motion.button
-                    className="rp-btn-ghost"
-                    onClick={() => setWaypoints([])}
-                    whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.985 }}
-                  >Clear All</motion.button>
-                </div>
-=======
                 {/* Fleet totals */}
                 <AnimatePresence>
                   {routesComputed && routes.length > 0 && (
@@ -343,17 +302,11 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
                     </motion.div>
                   )}
                 </AnimatePresence>
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
               </motion.div>
             )}
 
-<<<<<<< HEAD
-          <AnimatePresence>
-            {waypoints.length >= 2 && (
-=======
             {/* ── Manual tab ── */}
             {tab === 'manual' && (
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
               <motion.div
                 key="manual"
                 initial={{ opacity: 0, y: 6 }}
@@ -361,32 +314,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               >
-<<<<<<< HEAD
-                <div className="gi-divider" />
-                <div className="panel-label" style={{ marginBottom: 12 }}>Segments</div>
-                <motion.div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
-                  variants={staggerList} initial="hidden" animate="show"
-                >
-                  {waypoints.slice(1).map((wp, i) => {
-                    const km = segmentKm(waypoints[i], wp)
-                    return (
-                      <motion.div key={i} variants={fadeUp} className="rp-segment-card">
-                        <div className="rp-segment-num">{i + 1}</div>
-                        <div className="rp-segment-info">
-                          <span className="rp-segment-dist">{km.toFixed(1)} km</span>
-                          <span className="ship-sep">·</span>
-                          <span className="rp-segment-co2">+{(km * 0.8).toFixed(1)} t CO₂</span>
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </motion.div>
-                <div className="rp-total">
-                  <span>Total</span>
-                  <span className="rp-total-val">+{totalCO2} t CO₂</span>
-                </div>
-=======
                 <AnimatePresence>
                   {manualWaypoints.length === 0 && (
                     <motion.div
@@ -487,7 +414,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
                     </motion.div>
                   )}
                 </AnimatePresence>
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
               </motion.div>
             )}
           </AnimatePresence>
@@ -497,88 +423,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
       {/* ── Map ── */}
       <div className="map-container">
         <Map
-<<<<<<< HEAD
-          initialViewState={{ longitude: -118.8, latitude: 33.8, zoom: 4 }}
-          style={{ width: '100%', height: '100%' }}
-          mapStyle="mapbox://styles/mapbox/dark-v11"
-          mapboxAccessToken={MAPBOX_TOKEN}
-          onClick={e => {
-            // Don't add waypoint if clicking a cluster or vessel
-            const features = e.features ?? []
-            if (features.some(f => f.layer?.id?.startsWith('traffic'))) return
-            setWaypoints(prev => [...prev, { lat: e.lngLat.lat, lon: e.lngLat.lng }])
-          }}
-          cursor="crosshair"
-          reuseMaps
-          interactiveLayerIds={['traffic-clusters', 'traffic-points']}
-        >
-          <MPAOverlay />
-
-          {/* AIS traffic — GeoJSON + clustering, GPU-rendered, zero DOM elements */}
-          <Source
-            id="traffic"
-            type="geojson"
-            data={trafficGeoJSON}
-            cluster={true}
-            clusterMaxZoom={8}
-            clusterRadius={45}
-          >
-            {/* Cluster circles */}
-            <Layer
-              id="traffic-clusters"
-              type="circle"
-              filter={['has', 'point_count']}
-              paint={{
-                'circle-color': [
-                  'step', ['get', 'point_count'],
-                  'rgba(245,158,11,0.55)', 20,
-                  'rgba(245,158,11,0.7)',  100,
-                  'rgba(239,68,68,0.7)',
-                ],
-                'circle-radius': ['step', ['get', 'point_count'], 14, 20, 20, 100, 28],
-                'circle-stroke-width': 1,
-                'circle-stroke-color': 'rgba(255,255,255,0.15)',
-              }}
-            />
-            {/* Cluster count label */}
-            <Layer
-              id="traffic-cluster-label"
-              type="symbol"
-              filter={['has', 'point_count']}
-              layout={{
-                'text-field': '{point_count_abbreviated}',
-                'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-                'text-size': 11,
-              }}
-              paint={{ 'text-color': '#07101d', 'text-halo-color': 'rgba(0,0,0,0.2)', 'text-halo-width': 1 }}
-            />
-            {/* Individual vessel dots */}
-            <Layer
-              id="traffic-points"
-              type="circle"
-              filter={['!', ['has', 'point_count']]}
-              paint={{
-                'circle-radius': 4,
-                'circle-color': [
-                  'case',
-                  ['==', ['get', 'conflict'], true], '#ef4444',
-                  '#f59e0b',
-                ],
-                'circle-opacity': 0.85,
-                'circle-stroke-width': 1,
-                'circle-stroke-color': 'rgba(255,255,255,0.25)',
-              }}
-            />
-          </Source>
-
-          {/* Route line */}
-          {waypoints.length >= 2 && (
-            <Source id="route" type="geojson" data={routeGeoJSON}>
-              <Layer id="route-glow" type="line"
-                paint={{ 'line-color': ROUTE_COLOR, 'line-width': 14, 'line-blur': 10, 'line-opacity': 0.2 }} />
-              <Layer id="route-line" type="line"
-                paint={{ 'line-color': ROUTE_COLOR, 'line-width': 2.5, 'line-dasharray': [3, 2] }} />
-=======
           initialViewState={{ longitude: -119.8, latitude: 33.8, zoom: 7 }}
           style={{ width: '100%', height: '100%' }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
@@ -638,7 +482,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
             >
               <Layer id="manual-glow" type="line" paint={{ 'line-color': '#22d3ee', 'line-width': 14, 'line-blur': 10, 'line-opacity': 0.2 }} />
               <Layer id="manual-line" type="line" paint={{ 'line-color': '#22d3ee', 'line-width': 2.5, 'line-dasharray': [3, 2] }} />
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
             </Source>
           )}
 
@@ -688,13 +531,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
             </Marker>
           ))}
 
-<<<<<<< HEAD
-          {/* Fleet OAE ships */}
-          {fleet?.map(ship => (
-            <Marker key={ship.ship_id} longitude={ship.position.lon} latitude={ship.position.lat} anchor="center">
-              <ShipMarker status={ship.status} name={ship.name}
-                lat={ship.position.lat} lon={ship.position.lon} co2={ship.co2_removed_tons} />
-=======
           {/* AIS traffic */}
           {traffic?.map((v: any) => (
             <Marker key={v.vessel_id} longitude={v.lon} latitude={v.lat} anchor="center">
@@ -703,7 +539,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
                   <path d="M7 1 L13 13 L7 10 L1 13 Z" fill="#f59e0b" fillOpacity="0.9" />
                 </svg>
               </div>
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
             </Marker>
           ))}
         </Map>
@@ -711,15 +546,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
         {/* Legend */}
         <div className="map-legend">
           <div className="legend-row"><div className="legend-swatch" /><span>MPA Zone</span></div>
-<<<<<<< HEAD
-          <div className="legend-row">
-            <div style={{ width: 20, height: 3, background: ROUTE_COLOR, borderRadius: 2, boxShadow: `0 0 6px ${ROUTE_COLOR}66` }} />
-            <span>Planned Route</span>
-          </div>
-          <div className="legend-rule" />
-          <div className="legend-row">
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
-=======
           {routes.map(r => (
             <div key={r.ship.ship_id} className="legend-row">
               <div style={{ width: 20, height: 3, background: r.color, borderRadius: 2, boxShadow: `0 0 5px ${r.color}55` }} />
@@ -743,7 +569,6 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
             <svg width="10" height="10" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
               <path d="M7 1 L13 13 L7 10 L1 13 Z" fill="#f59e0b" />
             </svg>
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
             <span>AIS Vessel</span>
           </div>
           <div className="legend-row">

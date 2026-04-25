@@ -52,29 +52,6 @@ def _get_geochemist_agent():
         _geochemist_agent = GeochemistAgent()
     return _geochemist_agent
 
-<<<<<<< HEAD
-app = FastAPI(
-    title="The Tiered Edge Fleet",
-    description="Ocean Alkalinity Enhancement Simulation Platform",
-    version="0.1.0"
-)
-
-@app.on_event("startup")
-async def _startup():
-    """Start real-time AIS stream in background on server boot."""
-    asyncio.create_task(ais_stream.stream_forever())
-
-# CORS for React frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-=======
->>>>>>> a713eef (feat: AI fleet routing, startup orchestration, 3D origin fix, ocean data pre-caching)
 # Paths
 PROJECT_ROOT = Path(__file__).parent.parent
 JULIA_SCRIPT = PROJECT_ROOT / "julia" / "plume_simulator.jl"
