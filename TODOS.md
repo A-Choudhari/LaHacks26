@@ -31,7 +31,7 @@
 - [x] **U3** — AI typewriter: `TypewriterText` component in `AIPanel.tsx` types each character at 12ms/char with blinking `▌` cursor; recommendations stagger in as list items after typewriter finishes
 - [x] **U6** — Loading skeletons: `FleetPanel` accepts `isLoading` prop; shows 3 shimmer skeleton cards (CSS `@keyframes shimmer`) while fleet data loads; stat tiles also shimmer
 - [x] **U7** — Count-up animation: `useCountUp` hook in `ImpactMetrics.tsx` animates from previous value to new value with cubic ease-out over 700ms using `requestAnimationFrame`
-- [x] **U8** — Header status chips: `/health` polled every 5s; shows latency (ms), Gemma ✓/✗, Live/Mock data source as small color-coded chips; fade-in on first load
+- [x] **U8** — Header status chips: `/health` polled every 5s; shows latency (ms), Gemma ✓/✗, **GPU ✓/✗** (Julia availability — not "Mock/Live") as small color-coded chips; fade-in on first load
 - [x] **U9** — Responsive: at 1100px sidebar narrows to 240px and chips hide; at 860px sidebars collapse entirely so map takes full width
 - [x] Mapbox token configured
 - [x] Ollama + Gemma 2 setup
@@ -49,6 +49,23 @@
 - [x] Agent 2: Geochemist / Dispatcher (`backend/agents/geochemist.py`, function calling, `/analyze` integration)
 - [x] Agent 3: Verdict Logger / MRV proof (`compute_mrv_hash()` in `main.py`, SHA-256 hash, `data/mrv_log.jsonl`, "✓ MRV" badge)
 - [x] Pre-compute rich simulation fallback data (50×50 directional Gaussian plume in `plume_simulation.json`)
+
+---
+
+## Phase 3 — Live Data & Simulation — Completed
+
+- [x] **Live ocean data**: `POST /simulate` fetches real SST from NOAA ERDDAP (jplMURSST41) and salinity/MLD/alkalinity from nearest CalCOFI station; falls back gracefully when ERDDAP is unreachable. Source shown as `live-conditions` badge in SimulationPanel.
+- [x] **Physics-based plume**: `generate_plume_from_conditions()` in `main.py` — MLD controls cross-track spread, vessel speed controls along-track length, temperature drives olivine dissolution; replaces static mock Gaussian.
+- [x] **Correct ship positions**: All three ships placed in Pacific Ocean off California coast (Pacific Guardian: 33.80°N 119.50°W, Ocean Sentinel: 32.50°N 119.20°W, Reef Protector: 35.10°N 121.90°W). Backend ocean state fetch updated to use Pacific Guardian coordinates (was erroneously using downtown LA).
+- [x] **Continuous ship animation**: `advanceShip()` advances each ship along its heading at its speed every 1500 ms client-side; no backend calls during animation. `TICK_MS=1500`, `SIM_REFRESH_MS=45000`.
+- [x] **Simulation controls**: SimulationPanel has ⏸ Pause / ▶ Resume and ↺ Reset buttons; elapsed time row with pulsing live-dot.
+- [x] **Ship heading rotation**: `ShipMarker` accepts `heading` prop; SVG rotates to vessel bearing with 1.2 s CSS transition.
+- [x] **Plume follows ship**: `PlumeHeatmap` accepts `centerLat`/`centerLon` props; heatmap recenters on the active (deploying) ship each frame.
+- [x] **Sim status bar**: Bottom-center overlay in Mission Control shows Live/Paused dot, elapsed time, and "Fetching conditions…" spinner.
+- [x] **`POST /hotspot-impact`**: Deep-dive metric endpoint — fetches real ocean state at site, runs physics plume, returns CO₂ projections (1/5/10/50 yr), ocean chemistry (pH, aragonite saturation), plume geometry, economics (carbon credits), and safety assessment.
+- [x] **Impact analysis panel**: GlobalIntelligence fetches `POST /hotspot-impact` for each AI-discovered zone in parallel after `/discover`. Clicking a zone opens right sidebar with full metric-driven `ImpactPanel` (CO₂ removal grid, revenue projections, ocean chemistry rows, plume metrics, safety badge, raw ocean state).
+- [x] **Error boundary**: `ErrorBoundary` class component in `App.tsx` wraps `<main>`; catches any render errors and displays them on-screen instead of a blank black page.
+- [x] **Lazy ThreeLayer import**: `PlumeThreeLayer` loaded via dynamic `import('../ThreeLayer')` inside `handleMapLoad` so Three.js module never blocks or crashes the initial React render. Existing layer removed before re-adding on mode switch (`reuseMaps` guard).
 
 ---
 

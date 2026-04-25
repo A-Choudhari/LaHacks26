@@ -13,9 +13,10 @@ interface ShipMarkerProps {
   lat?: number
   lon?: number
   co2?: number
+  heading?: number
 }
 
-export function ShipMarker({ status, name, lat, lon, co2 }: ShipMarkerProps) {
+export function ShipMarker({ status, name, lat, lon, co2, heading }: ShipMarkerProps) {
   const [hovered, setHovered] = useState(false)
   const color = STATUS_COLORS[status] ?? '#6b7a8d'
 
@@ -28,7 +29,10 @@ export function ShipMarker({ status, name, lat, lon, co2 }: ShipMarkerProps) {
       {status === 'deploying' && (
         <div className="ship-pulse-ring" style={{ background: color, width: 28, height: 28 }} />
       )}
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <svg
+        width="28" height="28" viewBox="0 0 28 28" fill="none"
+        style={{ transform: heading !== undefined ? `rotate(${heading}deg)` : undefined, transition: 'transform 1.2s linear' }}
+      >
         <circle cx="14" cy="14" r="13" fill={`${color}18`} stroke={color} strokeWidth="1.3" />
         <path
           d="M14 6 C11.5 6 10 8 10 10.5 L10 18.5 C10 20 11.8 21.5 14 21.5 C16.2 21.5 18 20 18 18.5 L18 10.5 C18 8 16.5 6 14 6 Z"

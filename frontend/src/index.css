@@ -442,6 +442,81 @@ main {
   margin-bottom: 3px;
 }
 
+/* ── Source badges ── */
+.source-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.badge-live      { background: var(--success-dim); color: var(--success); }
+.badge-live-cond { background: var(--deploy-dim);  color: var(--deploy);  }
+.badge-mock      { background: var(--surface);     color: var(--text-3);  }
+
+/* ── Ocean Conditions block ── */
+.ocean-conditions {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 200, 240, 0.05);
+  border: 1px solid rgba(0, 200, 240, 0.15);
+  border-radius: 7px;
+}
+
+.ocean-conditions-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 9px;
+}
+
+.ocean-source-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--deploy);
+  box-shadow: 0 0 6px var(--deploy-glow);
+  animation: dot-breathe 3s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.ocean-source-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--deploy);
+  text-transform: uppercase;
+}
+
+.ocean-conditions-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.ocean-cond-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.ocean-cond-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.ocean-cond-lbl {
+  font-size: 9px;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* ── AI Panel ── */
 .analyze-btn {
   width: 100%;
@@ -1434,3 +1509,222 @@ header {
 
   .mode-seg-btn { padding: 6px 8px; font-size: 10px; }
 }
+
+/* ── Simulation controls ──────────────────────────────── */
+
+.sim-controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.sim-ctrl-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+  transition: background 0.15s, color 0.15s;
+}
+.sim-ctrl-btn:hover { background: var(--surface-hover); color: var(--text-1); }
+
+.sim-ctrl-btn.pause  { border-color: rgba(251,191,36,0.3); color: var(--warning); }
+.sim-ctrl-btn.resume { border-color: rgba(74,222,128,0.3); color: var(--success); }
+.sim-ctrl-btn.reset  { border-color: var(--border); color: var(--text-3); }
+
+.sim-elapsed-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.sim-elapsed-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+  animation: live-pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.sim-elapsed-text {
+  font-size: 10.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Sim status bar (map overlay) ────────────────────── */
+
+.sim-status-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  font-size: 11px;
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.sim-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sim-status-dot.running {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+.sim-status-dot.paused {
+  background: var(--warning);
+  box-shadow: 0 0 6px var(--warning);
+}
+
+.sim-status-label { color: var(--text-2); font-weight: 500; }
+.sim-elapsed       { color: var(--success); font-variant-numeric: tabular-nums; font-weight: 600; }
+.sim-fetching      { color: var(--deploy); }
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+/* ── Hotspot impact panel ─────────────────────────────── */
+
+.impact-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.impact-section {
+  margin-bottom: 14px;
+}
+
+.impact-section-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+.impact-metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.impact-metric-grid.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.impact-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.impact-metric-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.impact-metric-val.co2    { color: var(--success); }
+.impact-metric-val.deploy { color: var(--deploy); }
+.impact-metric-val.warn   { color: var(--warning); }
+
+.impact-metric-lbl {
+  font-size: 8.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.impact-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
+}
+
+.impact-safety-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.impact-safety-badge.low    { background: var(--success-dim); color: var(--success); border: 1px solid rgba(74,222,128,0.2); }
+.impact-safety-badge.medium { background: var(--warning-dim); color: var(--warning); border: 1px solid rgba(251,191,36,0.2); }
+.impact-safety-badge.high   { background: var(--danger-dim);  color: var(--danger);  border: 1px solid rgba(248,113,113,0.2); }
+
+.impact-failure {
+  font-size: 10px;
+  color: var(--danger);
+  padding: 3px 0;
+}
+
+.impact-chemistry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.impact-chemistry-row:last-child { border-bottom: none; }
+.impact-chem-label { color: var(--text-3); }
+.impact-chem-val   { color: var(--text-1); font-variant-numeric: tabular-nums; font-weight: 600; }
+.impact-chem-val.positive { color: var(--success); }
+.impact-chem-val.warning  { color: var(--warning); }
+
+.impact-loading {
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.impact-loading-spin {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  margin-right: 6px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }

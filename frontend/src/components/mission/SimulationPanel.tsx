@@ -8,9 +8,27 @@ interface SimulationPanelProps {
   onRun: (p: SimulationParams) => void
   isLoading: boolean
   result?: SimulationResult
+  isRunning?: boolean
+  elapsedLabel?: string
+  onToggleRunning?: () => void
+  onReset?: () => void
 }
 
-export function SimulationPanel({ onRun, isLoading, result }: SimulationPanelProps) {
+// Human-readable label for ocean state source
+function sourceLabel(src: string): string {
+  if (src.includes('noaa_erddap')) return 'NOAA ERDDAP + CalCOFI'
+  if (src === 'calcofi') return 'CalCOFI stations'
+  return 'offline defaults'
+}
+
+// Badge colour for simulation source
+function sourceBadgeClass(src: string): string {
+  if (src === 'live') return 'badge-live'
+  if (src === 'live-conditions') return 'badge-live-cond'
+  return 'badge-mock'
+}
+
+export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLabel, onToggleRunning, onReset }: SimulationPanelProps) {
   const [vesselSpeed, setVesselSpeed] = useState(5.0)
   const [dischargeRate, setDischargeRate] = useState(0.5)
   const [feedstock, setFeedstock] = useState<'olivine' | 'sodium_hydroxide'>('olivine')
@@ -42,8 +60,38 @@ export function SimulationPanel({ onRun, isLoading, result }: SimulationPanelPro
         whileHover={{ scale: isLoading ? 1 : 1.015 }}
         whileTap={{ scale: isLoading ? 1 : 0.985 }}
       >
-        {isLoading ? 'Simulating…' : 'Run Simulation'}
+        {isLoading ? 'Fetching conditions & simulating…' : 'Run Simulation'}
       </motion.button>
+
+      {onToggleRunning && (
+        <div className="sim-controls">
+          <motion.button
+            className={`sim-ctrl-btn ${isRunning ? 'pause' : 'resume'}`}
+            onClick={onToggleRunning}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+          >
+            {isRunning ? '⏸ Pause' : '▶ Resume'}
+          </motion.button>
+          {onReset && (
+            <motion.button
+              className="sim-ctrl-btn reset"
+              onClick={onReset}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              ↺ Reset
+            </motion.button>
+          )}
+        </div>
+      )}
+
+      {isRunning && elapsedLabel && (
+        <div className="sim-elapsed-row">
+          <div className="sim-elapsed-dot" />
+          <span className="sim-elapsed-text">Elapsed: {elapsedLabel}</span>
+        </div>
+      )}
 
       <AnimatePresence>
         {result && (
@@ -59,7 +107,11 @@ export function SimulationPanel({ onRun, isLoading, result }: SimulationPanelPro
               <span className={`result-title ${result.status}`}>
                 {result.status === 'safe' ? 'Deployment Safe' : 'Threshold Exceeded'}
               </span>
+              <span className={`source-badge ${sourceBadgeClass(result.source)}`}>
+                {result.source}
+              </span>
             </div>
+
             <div className="result-rows">
               <div className="result-row">
                 <span className="result-row-label">Ω aragonite</span>
@@ -69,11 +121,38 @@ export function SimulationPanel({ onRun, isLoading, result }: SimulationPanelPro
                 <span className="result-row-label">Total alkalinity</span>
                 <span className="result-row-val">{result.summary.max_total_alkalinity.toFixed(0)} µmol/kg</span>
               </div>
-              <div className="result-row">
-                <span className="result-row-label">Data source</span>
-                <span className="result-row-val">{result.source}</span>
-              </div>
             </div>
+
+            {/* Real ocean conditions used in simulation */}
+            {result.ocean_conditions && (
+              <div className="ocean-conditions">
+                <div className="ocean-conditions-header">
+                  <span className="ocean-source-dot" />
+                  <span className="ocean-source-label">
+                    {result.ocean_state_source ? sourceLabel(result.ocean_state_source) : 'Ocean data'}
+                  </span>
+                </div>
+                <div className="ocean-conditions-grid">
+                  <div className="ocean-cond-item">
+                    <span className="ocean-cond-val">{result.ocean_conditions.temperature_c.toFixed(1)}°C</span>
+                    <span className="ocean-cond-lbl">SST</span>
+                  </div>
+                  <div className="ocean-cond-item">
+                    <span className="ocean-cond-val">{result.ocean_conditions.salinity_psu.toFixed(1)}</span>
+                    <span className="ocean-cond-lbl">PSU</span>
+                  </div>
+                  <div className="ocean-cond-item">
+                    <span className="ocean-cond-val">{result.ocean_conditions.mixed_layer_depth_m.toFixed(0)}m</span>
+                    <span className="ocean-cond-lbl">MLD</span>
+                  </div>
+                  <div className="ocean-cond-item">
+                    <span className="ocean-cond-val">{result.ocean_conditions.baseline_alkalinity_umol_kg.toFixed(0)}</span>
+                    <span className="ocean-cond-lbl">TA base</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {result.safety_failures.length > 0 && (
               <div className="result-failures">
                 {result.safety_failures.map((f, i) => (

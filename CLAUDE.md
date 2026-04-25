@@ -61,14 +61,16 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 │                           Backend (FastAPI :8001)                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │ Endpoints                                                           │    │
-│  │ GET  /health       — system status                                  │    │
-│  │ POST /simulate     — plume dispersion + MRV hash                    │    │
-│  │ GET  /fleet        — OAE ship fleet status                          │    │
-│  │ POST /analyze      — AI safety analysis (agent → Ollama → rules)    │    │
-│  │ POST /agent        — dispatch to ADK agents                         │    │
-│  │ POST /discover     — AI-recommended deployment zones                │    │
-│  │ GET  /oceanographic— CalCOFI station data                           │    │
-│  │ GET  /traffic      — AIS vessel traffic                             │    │
+│  │ GET  /health          — system status                               │    │
+│  │ POST /simulate        — plume dispersion + MRV hash                 │    │
+│  │ GET  /fleet           — OAE ship fleet status                       │    │
+│  │ POST /analyze         — AI safety analysis (agent → Ollama → rules) │    │
+│  │ POST /agent           — dispatch to ADK agents                      │    │
+│  │ POST /discover        — AI-recommended deployment zones             │    │
+│  │ POST /hotspot-impact  — deep-dive metric analysis for a site        │    │
+│  │ GET  /ocean-state     — real-time ocean conditions for a lat/lon    │    │
+│  │ GET  /oceanographic   — CalCOFI station data                        │    │
+│  │ GET  /traffic         — AIS vessel traffic                          │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -130,7 +132,10 @@ frontend/src/
 
 ### Other Notes
 - Favicon: `frontend/public/favicon.svg` — sailboat + waves SVG, referenced in `index.html` with `?v=2` cache-bust
-- Mission Control initial map zoom: `7` (shows Pacific coast context; was 8.5)
+- Mission Control initial map zoom: `6.5` (shows Pacific coast context; was 8.5 → 7 → 6.5)
+- Header chip labels: `GPU ✓` / `GPU ✗` for Julia availability — NOT "Live/Mock" (that was misleading; simulation uses real CalCOFI data regardless of Julia)
+- Error boundary: `ErrorBoundary` class in `App.tsx` wraps `<main>` — catches render errors and displays them on-screen instead of a black page
+- ThreeLayer lazy import: `PlumeThreeLayer` is loaded via dynamic `import('../ThreeLayer')` inside `handleMapLoad` — never imported statically at app startup to prevent Three.js from blocking/crashing the initial render. `import type { PlumeThreeLayer }` used for the TypeScript type only.
 
 ### Backend Key Files
 - `backend/main.py` - FastAPI server with all endpoints — CORS allows `localhost:3000` and `3001`
@@ -139,8 +144,15 @@ frontend/src/
 - `backend/agents/base.py` - ADK agent base class and helpers
 - `julia/plume_simulator.jl` - Oceananigans.jl LES simulation (requires Julia + CUDA)
 - `data/mock/plume_simulation.json` - Pre-computed fallback plume data
-- `data/mock/calcofi_stations.json` - CalCOFI oceanographic station data
+- `data/mock/calcofi_stations.json` - CalCOFI oceanographic station data (real data, local cache)
 - `data/mrv_log.jsonl` - MRV cryptographic hash log
+
+### Live Data Sources
+- **NOAA ERDDAP jplMURSST41**: SST fetched via `fetch_ocean_state(lat, lon)` — `https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json`. 10-minute in-memory cache (`_ocean_state_cache`). Falls back to CalCOFI if unreachable.
+- **CalCOFI stations**: `data/mock/calcofi_stations.json` — 18 real oceanographic stations, used for salinity, MLD, baseline alkalinity. Despite "mock" path, this is real survey data.
+- **Ocean state source labels**: `"noaa_erddap+calcofi"` | `"calcofi"` | `"defaults"` — shown in SimulationPanel ocean conditions block.
+- **Simulation source labels**: `"live"` (Julia ran) | `"live-conditions"` (physics plume + real ocean data) | `"mock"` (full offline fallback).
+- **Ship deployment position for ocean fetch**: `(33.80, -119.50)` — Pacific Guardian site off Channel Islands (NOT downtown LA).
 
 ### Safety Thresholds (from OAE research)
 - Ω_aragonite > 30.0 → runaway carbonate precipitation (UNSAFE)
@@ -196,7 +208,7 @@ Radix Root/Track/Range/Thumb. 14px track, 28px thumb, gradient fill with glow. V
 2-option segmented control. Sliding `motion.div` indicator.
 
 **ShipMarker** (`components/shared/ShipMarker.tsx`)
-SVG top-down vessel: hull path, superstructure rect, bow line, port/starboard circles. Status-colored with pulsing ring for deploying.
+SVG top-down vessel: hull path, superstructure rect, bow line, port/starboard circles. Status-colored with pulsing ring for deploying. Accepts `heading?: number` — rotates SVG to vessel bearing with 1.2 s CSS `transition: transform`.
 
 **MPAOverlay** (`components/shared/MPAOverlay.tsx`)
 3 organic blob polygons. 3 layers: wide blur glow line → translucent fill → dotted outline (1.5/2.5 dash ratio).
@@ -213,8 +225,32 @@ SVG top-down vessel: hull path, superstructure rect, bow line, port/starboard ci
 
 **MissionControl** (`pages/MissionControl.tsx`)
 - Three-panel: left sidebar (SimulationPanel + AIPanel) + map + right sidebar (FleetPanel)
-- Three.js layer (`PlumeThreeLayer`) added on map load via `onLoad` callback
-- Simulation result card spring-animates in below the Run button
+- Three.js layer (`PlumeThreeLayer`) added on map load via `onLoad` callback — loaded with dynamic `import('../ThreeLayer')` (lazy) to prevent blocking initial render
+- `reuseMaps` guard: existing `'plume-three-layer'` is removed before re-adding on every `handleMapLoad` call (prevents "layer already exists" crash when switching modes)
+- `TICK_MS = 1500` — ship position advances client-side every 1.5 s via `advanceShip(ship, dtMs)`
+- `SIM_REFRESH_MS = 45_000` — re-fetches real ocean conditions every 45 s while running
+- `isRunning` / `elapsedS` state — Pause/Resume/Reset controls wired through `SimulationPanel`
+- Sim status bar: bottom-center map overlay (`sim-status-bar`) shows live/paused dot, elapsed time, fetching spinner
+- `PlumeHeatmap` receives `centerLat`/`centerLon` from active (deploying) ship so plume follows the vessel
+- Auto-starts simulation on mount via `useEffect(() => simulate.mutate(defaultParams), [])`
+
+**SimulationPanel** (`components/mission/SimulationPanel.tsx`)
+- Props: `onRun`, `isLoading`, `result?`, `isRunning?`, `elapsedLabel?`, `onToggleRunning?`, `onReset?`
+- Pause/Resume button (`.sim-ctrl-btn.pause` / `.resume`) and Reset button below Run Simulation button
+- Live elapsed row (`.sim-elapsed-row`) with pulsing green dot shown when `isRunning && elapsedLabel`
+- Result card shows: status, source badge, Ω aragonite, total alkalinity, real ocean conditions block (SST, PSU, MLD, baseline TA), safety failures
+
+**PlumeHeatmap** (`components/shared/PlumeHeatmap.tsx`)
+- Props: `visible`, `simulationData?`, `centerLat?`, `centerLon?`
+- `baseLon = centerLon ?? -119.50`, `baseLat = centerLat ?? 33.80` — heatmap recenters on active ship
+
+**GlobalIntelligence** (`pages/GlobalIntelligence.tsx`)
+- After `POST /discover` returns zones, fetches `POST /hotspot-impact` for each zone in parallel (`useEffect` on `discoveryZones`)
+- `impactData: Record<number, HotspotImpact>` — keyed by zone index
+- `selectedDiscIdx: number | null` — which discovery zone is selected; clicking opens right sidebar
+- Right sidebar (`sidebar-right`) appears via `AnimatePresence` when `selectedDiscIdx !== null`
+- `ImpactPanel` component (defined at bottom of file): renders CO₂ projections (1/5/10/50 yr), revenue, ocean chemistry, plume metrics, safety badge, ocean state — all metric-driven
+- `fmt(n, dec)` helper: formats large numbers as `k` / `M`
 
 **RoutePlanning** (`pages/RoutePlanning.tsx`)
 - Three-panel: left (route controls) + map + right (AIS Traffic)
@@ -224,6 +260,21 @@ SVG top-down vessel: hull path, superstructure rect, bow line, port/starboard ci
 - Waypoint markers: cyan circles with numbered labels, spring-animate in on placement
 - AIS traffic: SVG arrow markers on map, ship-card style in right sidebar with amber pip
 - Segment cards stagger in, total CO₂ shown in green summary row
+
+### New CSS Classes (Phase 3)
+| Class | Location | Purpose |
+|---|---|---|
+| `.sim-controls` | `index.css` | Flex row for Pause/Resume + Reset buttons |
+| `.sim-ctrl-btn.pause/.resume/.reset` | `index.css` | Colored control buttons |
+| `.sim-elapsed-row` / `.sim-elapsed-dot` | `index.css` | Live elapsed time row with pulsing dot |
+| `.sim-status-bar` | `index.css` | Bottom-center map overlay pill (Live/Paused status) |
+| `.sim-status-dot.running/.paused` | `index.css` | Animated status dot |
+| `.impact-panel` / `.impact-section` | `index.css` | Right sidebar container for hotspot metrics |
+| `.impact-metric-grid` / `.impact-metric-card` | `index.css` | 2-col or 4-col metric tile grid |
+| `.impact-metric-val.co2/.deploy/.warn` | `index.css` | Color-coded metric values |
+| `.impact-safety-badge.low/.medium/.high` | `index.css` | Risk level badge |
+| `.impact-chemistry-row` | `index.css` | Key-value chemistry row |
+| `.impact-loading` | `index.css` | Loading/empty state in impact panel |
 
 ### MRV (Measurement, Reporting, Verification)
 Every simulation result is hashed (SHA-256) and logged to `data/mrv_log.jsonl` for tamper-evident carbon credit verification. The hash is displayed in the Impact Metrics overlay.
