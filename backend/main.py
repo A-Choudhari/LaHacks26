@@ -25,6 +25,8 @@ from data_fetcher import (
     fetch_currents, compute_oae_scores, fetch_global_oae_hotspots,
     _load, refresh_all
 )
+# Real-time AIS vessel stream
+import ais_stream
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,11 @@ app = FastAPI(
     description="Ocean Alkalinity Enhancement Simulation Platform",
     version="0.1.0"
 )
+
+@app.on_event("startup")
+async def _startup():
+    """Start real-time AIS stream in background on server boot."""
+    asyncio.create_task(ais_stream.stream_forever())
 
 # CORS for React frontend
 app.add_middleware(
@@ -130,6 +137,8 @@ class HealthResponse(BaseModel):
     julia_available: bool
     mock_data_available: bool
     ollama_available: bool
+    ais_live: bool = False
+    ais_vessels: int = 0
 
 
 def compute_mrv_hash(result: "SimulationResult") -> str:
@@ -181,7 +190,9 @@ async def health_check():
         status="ok",
         julia_available=julia_ok,
         mock_data_available=mock_ok,
-        ollama_available=ollama_ok
+        ollama_available=ollama_ok,
+        ais_live=ais_stream.is_connected(),
+        ais_vessels=ais_stream.vessel_count(),
     )
 
 
@@ -987,27 +998,40 @@ def _simulate_vessel_movement(vessel: dict, elapsed_seconds: float) -> dict:
 @app.get("/traffic", response_model=list[VesselTraffic])
 async def get_vessel_traffic():
     """
-    Simulated live AIS vessel traffic near the OAE deployment zone.
-    Vessels move in real-time based on heading and speed.
-    Used in Route Planning mode to show realistic shipping traffic.
+    Real-time global AIS vessel traffic via aisstream.io WebSocket.
+    Falls back to simulated movement of curated NOAA AIS vessels when
+    AISSTREAM_API_KEY is not set or the stream is disconnected.
+
+    Live mode: returns all vessels seen in the last 30 minutes globally.
+    Fallback mode: returns 12 curated vessels from NOAA AIS 2024 CA data
+                   with simulated position updates based on heading/speed.
     """
+    # Prefer live AIS stream
+    live = ais_stream.get_vessels()
+    if live:
+        return [VesselTraffic(**{k: v for k, v in vessel.items()
+                                 if k in VesselTraffic.model_fields})
+                for vessel in live]
+
+    # Fallback: curated data with simulated movement
     global _vessel_state
     now = time.time()
 
-    # Initialize or reset if stale (>5 min without requests)
     if not _vessel_state["vessels"] or now - _vessel_state["last_update"] > 300:
         _vessel_state["vessels"] = _load_base_vessels()
         _vessel_state["last_update"] = now
-        return [VesselTraffic(**v) for v in _vessel_state["vessels"]]
+        return [VesselTraffic(**{k: v for k, v in vessel.items()
+                                 if k in VesselTraffic.model_fields})
+                for vessel in _vessel_state["vessels"]]
 
-    # Calculate elapsed time and update positions
     elapsed = now - _vessel_state["last_update"]
     _vessel_state["last_update"] = now
-
     for vessel in _vessel_state["vessels"]:
         _simulate_vessel_movement(vessel, elapsed)
 
-    return [VesselTraffic(**v) for v in _vessel_state["vessels"]]
+    return [VesselTraffic(**{k: v for k, v in vessel.items()
+                             if k in VesselTraffic.model_fields})
+            for vessel in _vessel_state["vessels"]]
 
 
 # ── Hotspot Impact Analysis ───────────────────────────────────────────────────
