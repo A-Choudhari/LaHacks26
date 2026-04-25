@@ -145,7 +145,7 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
         <div className="panel">
           <div className="panel-label">OAE Zones</div>
 
-          <motion.div className="gi-zone-list" variants={staggerList} initial="hidden" animate="show">
+          <motion.div data-tour="gi-zones" className="gi-zone-list" variants={staggerList} initial="hidden" animate="show">
             {OAE_ZONES.features.map(f => {
               const t = zoneTier(f.properties.score)
               const isSelected = selectedZone?.name === f.properties.name
@@ -184,6 +184,7 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
           <AnimatePresence>
             {stations && (
               <motion.div
+                data-tour="gi-calcofi"
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, type: 'spring', stiffness: 380, damping: 30 }}
@@ -207,6 +208,7 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
           {/* Discover button */}
           <div className="gi-divider" />
           <motion.button
+            data-tour="gi-discover"
             className="run-btn"
             onClick={runDiscovery}
             disabled={isDiscovering}
@@ -269,7 +271,7 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
       </motion.div>
 
       {/* ── Map ── */}
-      <div className="map-container">
+      <div className="map-container" data-tour="gi-map">
         <Map
           ref={mapRef}
           initialViewState={{ longitude: -110, latitude: 20, zoom: 1.8 }}

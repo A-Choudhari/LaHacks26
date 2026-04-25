@@ -186,26 +186,31 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
         animate={{ x: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 280, damping: 30 }}
       >
-        <SimulationPanel
-          onRun={p => simulate.mutate(p)}
-          isLoading={simulate.isPending}
-          result={simulationResult}
-          isRunning={isRunning}
-          elapsedLabel={elapsedLabel}
-          onToggleRunning={() => setIsRunning(r => !r)}
-          onReset={() => {
-            setIsRunning(false)
-            setElapsedS(0)
-            if (initialFleet?.length) setLiveShips(initialFleet)
-            setSimulationResult(undefined)
-            setShowPlume(false)
-          }}
-        />
-        <AIPanel result={simulationResult} />
+        <div data-tour="mc-sim-panel">
+          <SimulationPanel
+            onRun={p => simulate.mutate(p)}
+            isLoading={simulate.isPending}
+            result={simulationResult}
+            isRunning={isRunning}
+            elapsedLabel={elapsedLabel}
+            onToggleRunning={() => setIsRunning(r => !r)}
+            onReset={() => {
+              setIsRunning(false)
+              setElapsedS(0)
+              if (initialFleet?.length) setLiveShips(initialFleet)
+              setSimulationResult(undefined)
+              setShowPlume(false)
+            }}
+          />
+        </div>
+        <div data-tour="mc-ai-panel">
+          <AIPanel result={simulationResult} />
+        </div>
 
         <AnimatePresence>
           {simulationResult && (
             <motion.div
+              data-tour="mc-viz-3d"
               className="panel"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -290,7 +295,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
       </motion.div>
 
       {/* ── Map ── */}
-      <div className="map-container">
+      <div className="map-container" data-tour="mc-map">
         <Map
           ref={mapRef}
           initialViewState={{ longitude: -120.0, latitude: 33.8, zoom: 6.5 }}
@@ -330,7 +335,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
         </Map>
 
         <MapLegend showPlume={showPlume} />
-        <ImpactMetrics result={simulationResult} fleet={liveShips} />
+        <div data-tour="mc-impact"><ImpactMetrics result={simulationResult} fleet={liveShips} /></div>
 
         {/* Sim status bar */}
         <div className="sim-status-bar">
@@ -347,6 +352,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
 
       {/* ── Right sidebar ── */}
       <motion.div
+        data-tour="mc-fleet"
         className="sidebar sidebar-right"
         initial={{ x: 280, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}

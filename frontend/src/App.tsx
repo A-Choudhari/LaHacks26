@@ -10,6 +10,8 @@ import { ModeSelector } from './components/shared/ModeSelector'
 import { GlobalIntelligence } from './pages/GlobalIntelligence'
 import { MissionControl } from './pages/MissionControl'
 import { RoutePlanning } from './pages/RoutePlanning'
+import { TourOverlay } from './components/tour/TourOverlay'
+import { GLOBAL_TOUR, MISSION_TOUR, ROUTE_TOUR, TOUR_STORAGE_KEYS } from './components/tour/tourSteps'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
@@ -39,8 +41,15 @@ interface HealthData {
   latency: number
 }
 
+const TOUR_STEPS = {
+  global:  GLOBAL_TOUR,
+  mission: MISSION_TOUR,
+  route:   ROUTE_TOUR,
+}
+
 function AppContent() {
   const [mode, setMode] = useState<AppMode>('mission')
+  const [restartSignal, setRestartSignal] = useState(0)
 
   const { data: fleet, isLoading: fleetLoading } = useQuery<ShipStatus[]>({
     queryKey: ['fleet'],
@@ -58,6 +67,13 @@ function AppContent() {
     },
     refetchInterval: 5000,
   })
+
+  const storageKey = TOUR_STORAGE_KEYS[mode]
+
+  const handleModeChange = (next: AppMode) => {
+    setMode(next)
+    setRestartSignal(0)
+  }
 
   return (
     <div className="app">
@@ -93,7 +109,7 @@ function AppContent() {
         </div>
 
         <div className="header-center">
-          <ModeSelector mode={mode} onModeChange={setMode} />
+          <ModeSelector mode={mode} onModeChange={handleModeChange} />
         </div>
 
         <motion.div
@@ -122,6 +138,23 @@ function AppContent() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Tour restart button */}
+          <motion.button
+            className="tour-restart-btn"
+            title="Restart tour"
+            onClick={() => {
+              localStorage.removeItem(storageKey)
+              setRestartSignal(s => s + 1)
+            }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.92 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            ?
+          </motion.button>
         </motion.div>
       </motion.header>
 
@@ -132,6 +165,16 @@ function AppContent() {
           {mode === 'route'   && <RoutePlanning fleet={fleet} />}
         </ErrorBoundary>
       </main>
+
+      {/* Per-mode tour overlay — mounts outside ErrorBoundary so it never crashes */}
+      <AnimatePresence mode="wait">
+        <TourOverlay
+          key={mode}
+          steps={TOUR_STEPS[mode]}
+          storageKey={storageKey}
+          restartSignal={restartSignal}
+        />
+      </AnimatePresence>
     </div>
   )
 }
