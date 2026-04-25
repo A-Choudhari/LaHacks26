@@ -205,6 +205,7 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
           style={{ width: '100%', height: '100%' }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           mapboxAccessToken={MAPBOX_TOKEN}
+          reuseMaps
           interactiveLayerIds={['oae-fill']}
           onClick={e => {
             // Only update selection when clicking a named zone feature on the map

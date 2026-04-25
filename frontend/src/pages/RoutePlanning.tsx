@@ -174,6 +174,7 @@ export function RoutePlanning({ fleet }: RoutePlanningProps) {
           style={{ width: '100%', height: '100%' }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           mapboxAccessToken={MAPBOX_TOKEN}
+          reuseMaps
           onClick={e => setWaypoints(prev => [...prev, { lat: e.lngLat.lat, lon: e.lngLat.lng }])}
           cursor="crosshair"
         >

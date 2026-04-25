@@ -86,6 +86,7 @@ export function MissionControl({ fleet, fleetLoading }: MissionControlProps) {
           style={{ width: '100%', height: '100%' }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           mapboxAccessToken={MAPBOX_TOKEN}
+          reuseMaps
           onLoad={handleMapLoad}
         >
           <MPAOverlay />
