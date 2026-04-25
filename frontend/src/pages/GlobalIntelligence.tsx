@@ -477,6 +477,25 @@ export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) 
             </>
           )}
           <div className="legend-rule" />
+          <div className="legend-grad-label">AIS Vessel Traffic</div>
+          <div className="legend-row">
+            <svg width="8" height="12" viewBox="0 0 14 20" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M7 1C4.8 1 3.5 3 3.5 5.5L3.5 15.5C3.5 17.5 5 19 7 19C9 19 10.5 17.5 10.5 15.5L10.5 5.5C10.5 3 9.2 1 7 1Z" fill="#f59e0b"/>
+            </svg>
+            <span>Live AIS vessel</span>
+          </div>
+          <div className="legend-row">
+            <svg width="8" height="12" viewBox="0 0 14 20" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M7 1C4.8 1 3.5 3 3.5 5.5L3.5 15.5C3.5 17.5 5 19 7 19C9 19 10.5 17.5 10.5 15.5L10.5 5.5C10.5 3 9.2 1 7 1Z" fill="#ef4444"/>
+            </svg>
+            <span>OAE conflict zone</span>
+          </div>
+          {traffic?.length ? (
+            <div className="legend-row" style={{ marginTop: 2 }}>
+              <span style={{ color: 'var(--text-3)', fontSize: 9 }}>{traffic.length.toLocaleString()} vessels live</span>
+            </div>
+          ) : null}
+          <div className="legend-rule" />
           <div style={{ fontSize: 8.5, color: 'var(--text-3)', lineHeight: 1.4, paddingTop: 2 }}>
             Sources: NOAA OISST v2.1 · QuikSCAT/ASCAT wind<br/>
             Score: SST×0.30 + Wind×0.30 + Lat×0.25 + Upwelling

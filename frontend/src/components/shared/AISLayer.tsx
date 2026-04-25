@@ -1,40 +1,77 @@
 /**
- * AISLayer — GPU-rendered AIS vessel traffic via Mapbox GeoJSON + clustering.
+ * AISLayer — GPU-rendered AIS vessel traffic.
  *
- * Replaces individual <Marker> components (one DOM node per vessel = lag)
- * with a single WebGL-rendered cluster source that handles 3000+ ships
- * at 60fps with zero DOM overhead.
- *
- * Usage: drop inside any <Map> component.
+ * Individual vessels render as ship silhouette icons (SDF image, rotates
+ * with heading, tinted amber / red for conflict zones). Nearby vessels
+ * cluster into amber bubbles at low zoom. Zero DOM elements.
  */
 
-import { useMemo } from 'react'
-import { Source, Layer } from 'react-map-gl'
+import { useEffect, useMemo } from 'react'
+import { Source, Layer, useMap } from 'react-map-gl'
 
-interface Vessel {
+export interface AISVessel {
   vessel_id: string
-  name: string
+  name:        string
   vessel_type: string
-  lat: number
-  lon: number
-  speed_kn: number
+  lat:         number
+  lon:         number
+  heading:     number
+  speed_kn:    number
   conflict_risk?: boolean
 }
 
 interface AISLayerProps {
-  vessels?: Vessel[]
+  vessels?: AISVessel[]
+}
+
+// White-on-transparent top-down ship SVG — loaded as SDF so icon-color tints it at runtime
+const SHIP_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 20" width="14" height="20">
+  <path d="M7 1 C4.8 1 3.5 3 3.5 5.5 L3.5 15.5 C3.5 17.5 5 19 7 19 C9 19 10.5 17.5 10.5 15.5 L10.5 5.5 C10.5 3 9.2 1 7 1 Z" fill="white"/>
+  <rect x="5.5" y="9" width="3" height="3" rx="0.5" fill="black" fill-opacity="0.45"/>
+  <line x1="7" y1="1" x2="7" y2="5" stroke="black" stroke-width="1.2" stroke-opacity="0.35" stroke-linecap="round"/>
+</svg>`
+
+const IMAGE_ID = 'ais-ship-sdf'
+
+function useShipImage() {
+  const maps = useMap()
+
+  useEffect(() => {
+    const mapRef = Object.values(maps)[0]
+    if (!mapRef) return
+    const map = mapRef.getMap()
+    if (!map) return
+
+    const load = () => {
+      if (map.hasImage(IMAGE_ID)) return
+      const blob = new Blob([SHIP_SVG], { type: 'image/svg+xml' })
+      const url  = URL.createObjectURL(blob)
+      const img  = new Image(14, 20)
+      img.onload = () => {
+        if (!map.hasImage(IMAGE_ID)) map.addImage(IMAGE_ID, img, { sdf: true })
+        URL.revokeObjectURL(url)
+      }
+      img.src = url
+    }
+
+    if (map.isStyleLoaded()) load()
+    else map.once('styledata', load)
+  }, [maps])
 }
 
 export function AISLayer({ vessels }: AISLayerProps) {
+  useShipImage()
+
   const geojson = useMemo(() => ({
     type: 'FeatureCollection' as const,
     features: (vessels ?? []).map(v => ({
       type: 'Feature' as const,
       properties: {
-        name:         v.name,
-        vessel_type:  v.vessel_type,
-        speed_kn:     v.speed_kn,
-        conflict:     v.conflict_risk ?? false,
+        name:        v.name,
+        vessel_type: v.vessel_type,
+        speed_kn:    v.speed_kn,
+        heading:     v.heading ?? 0,
+        conflict:    v.conflict_risk ?? false,
       },
       geometry: { type: 'Point' as const, coordinates: [v.lon, v.lat] },
     })),
@@ -51,7 +88,7 @@ export function AISLayer({ vessels }: AISLayerProps) {
       clusterMaxZoom={8}
       clusterRadius={48}
     >
-      {/* Cluster bubble */}
+      {/* ── Cluster bubble ── */}
       <Layer
         id="ais-clusters"
         type="circle"
@@ -65,7 +102,7 @@ export function AISLayer({ vessels }: AISLayerProps) {
           ],
           'circle-radius': [
             'step', ['get', 'point_count'],
-            13,  20,
+            13, 20,
             19, 100,
             26,
           ],
@@ -74,43 +111,50 @@ export function AISLayer({ vessels }: AISLayerProps) {
         }}
       />
 
-      {/* Cluster count label */}
+      {/* ── Cluster count label ── */}
       <Layer
         id="ais-cluster-count"
         type="symbol"
         filter={['has', 'point_count']}
         layout={{
-          'text-field': '{point_count_abbreviated}',
-          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-          'text-size': 11,
+          'text-field':  '{point_count_abbreviated}',
+          'text-font':   ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size':   11,
         }}
         paint={{
-          'text-color': '#0c0f14',
-          'text-halo-color': 'rgba(0,0,0,0.15)',
-          'text-halo-width': 1,
+          'text-color':        '#0c0f14',
+          'text-halo-color':   'rgba(0,0,0,0.15)',
+          'text-halo-width':   1,
         }}
       />
 
-      {/* Individual vessel dot */}
+      {/* ── Individual ship icon ── */}
       <Layer
         id="ais-points"
-        type="circle"
+        type="symbol"
         filter={['!', ['has', 'point_count']]}
+        layout={{
+          'icon-image':                  IMAGE_ID,
+          'icon-size':                   0.9,
+          'icon-rotate':                 ['get', 'heading'],
+          'icon-rotation-alignment':     'map',
+          'icon-pitch-alignment':        'map',
+          'icon-allow-overlap':          true,
+          'icon-ignore-placement':       true,
+        }}
         paint={{
-          'circle-radius': 4,
-          'circle-color': [
+          'icon-color': [
             'case',
             ['==', ['get', 'conflict'], true], '#ef4444',
             '#f59e0b',
           ],
-          'circle-opacity': 0.85,
-          'circle-stroke-width': 1,
-          'circle-stroke-color': 'rgba(255,255,255,0.22)',
+          'icon-opacity': 0.92,
+          'icon-halo-color': 'rgba(0,0,0,0.35)',
+          'icon-halo-width': 1,
         }}
       />
     </Source>
   )
 }
 
-/** Layer IDs used by AISLayer — pass to interactiveLayerIds to get click events */
 export const AIS_INTERACTIVE_LAYERS = ['ais-clusters', 'ais-points']

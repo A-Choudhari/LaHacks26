@@ -202,7 +202,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: M
           ))}
         </Map>
 
-        <MapLegend showPlume={showPlume} />
+        <MapLegend showPlume={showPlume} trafficCount={traffic?.length} />
         <div data-tour="mc-impact"><ImpactMetrics result={simulationResult} fleet={liveShips} /></div>
 
         {/* Sim status bar */}

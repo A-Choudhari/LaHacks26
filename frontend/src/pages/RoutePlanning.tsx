@@ -535,14 +535,22 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
             <span>OAE Hotspot</span>
           </div>
           <div className="legend-row">
-            <svg width="10" height="10" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-              <path d="M7 1 L13 13 L7 10 L1 13 Z" fill="#f59e0b" />
+            <svg width="8" height="12" viewBox="0 0 14 20" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M7 1C4.8 1 3.5 3 3.5 5.5L3.5 15.5C3.5 17.5 5 19 7 19C9 19 10.5 17.5 10.5 15.5L10.5 5.5C10.5 3 9.2 1 7 1Z" fill="#f59e0b"/>
             </svg>
             <span>AIS Vessel</span>
           </div>
           <div className="legend-row">
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
+            <svg width="8" height="12" viewBox="0 0 14 20" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M7 1C4.8 1 3.5 3 3.5 5.5L3.5 15.5C3.5 17.5 5 19 7 19C9 19 10.5 17.5 10.5 15.5L10.5 5.5C10.5 3 9.2 1 7 1Z" fill="#ef4444"/>
+            </svg>
             <span>Conflict Risk</span>
+          </div>
+          <div className="legend-row">
+            <div style={{ width: 14, height: 14, borderRadius: 3, background: 'rgba(245,158,11,0.5)', border: '1px solid rgba(245,158,11,0.4)', display:'flex',alignItems:'center',justifyContent:'center', flexShrink:0 }}>
+              <span style={{ fontSize: 7, color: '#0c0f14', fontWeight: 700 }}>N</span>
+            </div>
+            <span>Vessel cluster</span>
           </div>
           {traffic && (
             <div className="legend-row" style={{ marginTop: 4 }}>
