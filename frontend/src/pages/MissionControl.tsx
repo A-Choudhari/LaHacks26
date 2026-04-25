@@ -9,6 +9,7 @@ import { AIPanel } from '../components/mission/AIPanel'
 import { FleetPanel } from '../components/shared/FleetPanel'
 import { ShipMarker } from '../components/shared/ShipMarker'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
+import { AISLayer } from '../components/shared/AISLayer'
 import { PlumeHeatmap } from '../components/shared/PlumeHeatmap'
 import { MapLegend } from '../components/shared/MapLegend'
 import { ImpactMetrics } from '../components/shared/ImpactMetrics'
@@ -16,6 +17,7 @@ import { ImpactMetrics } from '../components/shared/ImpactMetrics'
 interface MissionControlProps {
   fleet?: ShipStatus[]
   fleetLoading?: boolean
+  traffic?: any[]
 }
 
 const TICK_MS = 1500   // ship position update interval
@@ -41,7 +43,7 @@ function advanceShip(ship: ShipStatus, dtMs: number): ShipStatus {
   }
 }
 
-export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionControlProps) {
+export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: MissionControlProps) {
   const [simulationResult, setSimulationResult] = useState<SimulationResult>()
   const [showPlume, setShowPlume] = useState(false)
   const [isRunning, setIsRunning] = useState(true)
@@ -171,6 +173,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
           reuseMaps
         >
           <MPAOverlay />
+          <AISLayer vessels={traffic} />
 
           {/* Plume follows active (deploying) ship */}
           <PlumeHeatmap
@@ -199,7 +202,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
           ))}
         </Map>
 
-        <MapLegend showPlume={showPlume} />
+        <MapLegend showPlume={showPlume} trafficCount={traffic?.length} />
         <div data-tour="mc-impact"><ImpactMetrics result={simulationResult} fleet={liveShips} /></div>
 
         {/* Sim status bar */}
