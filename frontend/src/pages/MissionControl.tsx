@@ -1,8 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import Map, { Marker, MapRef } from 'react-map-gl'
-import { motion, AnimatePresence } from 'framer-motion'
-import * as SliderPrimitive from '@radix-ui/react-slider'
+import { motion } from 'framer-motion'
 import { API_URL, MAPBOX_TOKEN } from '../constants'
 import type { SimulationParams, SimulationResult, ShipStatus } from '../types'
 import { SimulationPanel } from '../components/mission/SimulationPanel'
@@ -13,7 +12,6 @@ import { MPAOverlay } from '../components/shared/MPAOverlay'
 import { PlumeHeatmap } from '../components/shared/PlumeHeatmap'
 import { MapLegend } from '../components/shared/MapLegend'
 import { ImpactMetrics } from '../components/shared/ImpactMetrics'
-import type { PlumeThreeLayer } from '../ThreeLayer'
 
 interface MissionControlProps {
   fleet?: ShipStatus[]
@@ -55,9 +53,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
     if (initialFleet?.length) setLiveShips(initialFleet)
   }, [initialFleet])
 
-  const [depthLevel, setDepthLevel] = useState(0.5) // 0 = top, 1 = bottom
   const mapRef = useRef<MapRef>(null)
-  const threeLayerRef = useRef<PlumeThreeLayer | null>(null)
   const tickRef = useRef<number | null>(null)
   const simRefreshRef = useRef<number | null>(null)
 
@@ -118,46 +114,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
     }
   }, [isRunning]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Three.js plume layer ─────────────────────────────────────────────────
-  // Clean up the custom layer when the component unmounts so that re-entering
-  // Mission Control mode (with reuseMaps) doesn't throw "layer already exists".
-  useEffect(() => {
-    return () => {
-      try {
-        const map = mapRef.current?.getMap()
-        if (map?.getLayer('plume-three-layer')) map.removeLayer('plume-three-layer')
-      } catch {}
-    }
-  }, [])
-
-  const handleMapLoad = useCallback(() => {
-    const map = mapRef.current?.getMap()
-    if (!map) return
-    // Lazy-import Three.js so module-init never blocks or crashes the first render
-    import('../ThreeLayer').then(({ PlumeThreeLayer }) => {
-      try {
-        if (map.getLayer('plume-three-layer')) map.removeLayer('plume-three-layer')
-        const layer = new PlumeThreeLayer(null)
-        threeLayerRef.current = layer
-        map.addLayer(layer)
-      } catch (err) {
-        console.warn('PlumeThreeLayer init failed:', err)
-      }
-    }).catch(err => console.warn('ThreeLayer module load failed:', err))
-  }, [])
-
-  useEffect(() => {
-    if (!simulationResult?.fields?.aragonite_saturation || !simulationResult.coordinates) return
-    threeLayerRef.current?.updateData({
-      fields: {
-        alkalinity: simulationResult.fields.alkalinity ?? [],
-        aragonite_saturation: simulationResult.fields.aragonite_saturation,
-      },
-      coordinates: simulationResult.coordinates,
-    })
-  }, [simulationResult])
-
-  // Deploying ship (Pacific Guardian) leads the plume
+// Deploying ship (Pacific Guardian) leads the plume
   const activeShip = liveShips.find(s => s.status === 'deploying') ?? liveShips[0]
 
   // Format elapsed time
@@ -169,12 +126,6 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
       ? `+${h}h ${m.toString().padStart(2, '0')}m`
       : `+${m}m ${s.toString().padStart(2, '0')}s`
   })()
-  // Update Three.js layer when depth changes
-  useEffect(() => {
-    if (threeLayerRef.current && simulationResult) {
-      threeLayerRef.current.setDepthLevel(depthLevel)
-    }
-  }, [depthLevel, simulationResult])
 
   return (
     <div className="mode-layout">
@@ -207,91 +158,6 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
           <AIPanel result={simulationResult} />
         </div>
 
-        <AnimatePresence>
-          {simulationResult && (
-            <motion.div
-              data-tour="mc-viz-3d"
-              className="panel"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            >
-              <div className="panel-label">3D Visualization</div>
-
-              <div className="view-toggle-row">
-                <motion.button
-                  className="view-3d-btn"
-                  onClick={() => {
-                    const map = mapRef.current?.getMap()
-                    if (map) {
-                      map.easeTo({
-                        pitch: 60,
-                        bearing: -20,
-                        center: [-118.24, 34.05],
-                        zoom: 9,
-                        duration: 1000,
-                      })
-                    }
-                  }}
-                  whileHover={{ scale: 1.015 }}
-                  whileTap={{ scale: 0.985 }}
-                >
-                  3D View
-                </motion.button>
-                <motion.button
-                  className="view-2d-btn"
-                  onClick={() => {
-                    const map = mapRef.current?.getMap()
-                    if (map) {
-                      map.easeTo({
-                        pitch: 0,
-                        bearing: 0,
-                        center: [-119.1, 33.55],
-                        zoom: 7,
-                        duration: 1000,
-                      })
-                    }
-                  }}
-                  whileHover={{ scale: 1.015 }}
-                  whileTap={{ scale: 0.985 }}
-                >
-                  2D View
-                </motion.button>
-              </div>
-
-              <div className="param-item" style={{ marginTop: 16 }}>
-                <div className="param-row">
-                  <span className="param-label">Section Depth</span>
-                  <motion.span
-                    key={depthLevel}
-                    className="param-value"
-                    initial={{ scale: 1.18, opacity: 0.55 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', stiffness: 520, damping: 22 }}
-                  >
-                    {Math.round(depthLevel * 100)}<span className="param-unit">%</span>
-                  </motion.span>
-                </div>
-                <SliderPrimitive.Root
-                  className="slider-root"
-                  min={0} max={1} step={0.05}
-                  value={[depthLevel]}
-                  onValueChange={([v]) => setDepthLevel(v)}
-                >
-                  <SliderPrimitive.Track className="slider-track">
-                    <SliderPrimitive.Range className="slider-range" />
-                  </SliderPrimitive.Track>
-                  <SliderPrimitive.Thumb className="slider-thumb" aria-label="Section Depth" />
-                </SliderPrimitive.Root>
-                <div className="depth-labels">
-                  <span>Surface</span>
-                  <span>Deep</span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </motion.div>
 
       {/* ── Map ── */}
@@ -303,7 +169,6 @@ export function MissionControl({ fleet: initialFleet, fleetLoading }: MissionCon
           mapStyle="mapbox://styles/mapbox/dark-v11"
           mapboxAccessToken={MAPBOX_TOKEN}
           reuseMaps
-          onLoad={handleMapLoad}
         >
           <MPAOverlay />
 
