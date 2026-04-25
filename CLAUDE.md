@@ -153,6 +153,7 @@ frontend/src/
 - **Ocean state source labels**: `"noaa_erddap+calcofi"` | `"calcofi"` | `"defaults"` — shown in SimulationPanel ocean conditions block.
 - **Simulation source labels**: `"live"` (Julia ran) | `"live-conditions"` (physics plume + real ocean data) | `"mock"` (full offline fallback).
 - **Ship deployment position for ocean fetch**: `(33.80, -119.50)` — Pacific Guardian site off Channel Islands (NOT downtown LA).
+- **Global OAE hotspots** (`GET /global-hotspots`): Real NOAA OISST v2.1 SST (ncdcOisst21Agg_LonPM180) + QuikSCAT/ASCAT wind speed (erdQCwindproductsMonthly). Scored by 4-factor model: SST×0.30 (CO₂ solubility via Henry's Law) + Wind×0.30 (gas transfer k∝u², Wanninkhof 2014) + Lat/mixing×0.25 (Southern Ocean > subpolar gyres > subtropics > tropics) + Upwelling basin bonus≤0.25. Filtered to show only highly viable regions (score ≥ 0.70) and organically distributed using ±1.5° geographic jitter to remove the 4° mathematical grid appearance. Cached 7 days to `data/real/global_hotspots.json`. Dot color = OAE score; dot size = wind speed (gas transfer proxy).
 
 ### Safety Thresholds (from OAE research)
 - Ω_aragonite > 30.0 → runaway carbonate precipitation (UNSAFE)

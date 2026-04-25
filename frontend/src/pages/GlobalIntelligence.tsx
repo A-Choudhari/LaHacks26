@@ -4,16 +4,9 @@ import Map, { Source, Layer, Marker, MapRef } from 'react-map-gl'
 import { useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { API_URL, MAPBOX_TOKEN, OAE_ZONES, fadeUp, staggerList } from '../constants'
-import type { CalCOFIStation, DiscoveryZone, HotspotImpact, ShipStatus } from '../types'
+import type { CalCOFIStation, DiscoveryZone, HotspotImpact, ShipStatus, GlobalHotspot } from '../types'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
 import { ShipMarker } from '../components/shared/ShipMarker'
-
-interface GlobalHotspot {
-  lat: number
-  lon: number
-  sst_c: number
-  oae_score: number
-}
 
 interface GlobalIntelligenceProps {
   fleet?: ShipStatus[]
@@ -123,7 +116,12 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
     type: 'FeatureCollection' as const,
     features: (globalHotspots ?? []).map(h => ({
       type: 'Feature' as const,
-      properties: { oae_score: h.oae_score, sst_c: h.sst_c },
+      properties: {
+        oae_score: h.oae_score,
+        sst_c: h.sst_c,
+        // wind_m_s drives circle size — higher wind = faster gas exchange = larger dot
+        wind_m_s: h.wind_m_s ?? 7.0,  // fallback to climatological mean if no wind data
+      },
       geometry: { type: 'Point' as const, coordinates: [h.lon, h.lat] },
     })),
   }
@@ -289,37 +287,56 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
           }}
         >
           {/* OAE zones — glow + fill + dotted outline */}
-          {/* Global OAE hotspots — real OISST data, 8° coarse grid */}
+          {/* Global OAE hotspots — real NOAA OISST + QuikSCAT/ASCAT wind data */}
+          {/* Color = OAE suitability score | Size = wind speed (gas transfer proxy) */}
           <Source id="global-hotspots" type="geojson" data={hotspotGeoJSON}>
+            {/* Glow halo — color-encodes composite OAE suitability score */}
             <Layer
               id="hotspot-glow"
               type="circle"
               paint={{
-                'circle-radius': ['interpolate', ['linear'], ['get', 'oae_score'], 0.25, 6, 1.0, 18],
-                'circle-color': ['interpolate', ['linear'], ['get', 'oae_score'],
-                  0.25, '#3b82f6',
-                  0.55, '#22d3ee',
-                  0.75, '#4ade80',
-                  1.0,  '#86efac',
+                // Radius: scale with wind speed (gas transfer velocity k ∝ u²)
+                // Clamp wind between 3–15 m/s → radius 5–20px
+                'circle-radius': ['interpolate', ['linear'], ['get', 'wind_m_s'],
+                  3,  5,
+                  7,  9,
+                  12, 14,
+                  15, 20,
                 ],
-                'circle-opacity': 0.18,
-                'circle-blur': 1.2,
+                // Color: OAE suitability (SST×0.30 + Wind×0.30 + Lat×0.25 + Upwelling)
+                'circle-color': ['interpolate', ['linear'], ['get', 'oae_score'],
+                  0.25, '#3b82f6',   // blue   — marginal (subtropics/tropics)
+                  0.50, '#22d3ee',   // cyan   — moderate
+                  0.70, '#4ade80',   // green  — good
+                  0.90, '#86efac',   // bright — premium (Southern Ocean / EBUS)
+                  1.0,  '#ffffff',   // white  — maximum (S. Ocean + strong winds)
+                ],
+                'circle-opacity': 0.16,
+                'circle-blur': 1.4,
               }}
             />
+            {/* Core dot — sharper inner circle */}
             <Layer
               id="hotspot-core"
               type="circle"
               paint={{
-                'circle-radius': ['interpolate', ['linear'], ['get', 'oae_score'], 0.25, 2.5, 1.0, 6],
-                'circle-color': ['interpolate', ['linear'], ['get', 'oae_score'],
-                  0.25, '#60a5fa',
-                  0.55, '#22d3ee',
-                  0.75, '#4ade80',
-                  1.0,  '#86efac',
+                // Core radius: score-driven, capped smaller than glow
+                'circle-radius': ['interpolate', ['linear'], ['get', 'oae_score'],
+                  0.25, 2.0,
+                  0.65, 3.5,
+                  0.85, 5.0,
+                  1.0,  7.0,
                 ],
-                'circle-opacity': 0.75,
+                'circle-color': ['interpolate', ['linear'], ['get', 'oae_score'],
+                  0.25, '#60a5fa',   // blue
+                  0.50, '#22d3ee',   // cyan
+                  0.70, '#4ade80',   // green
+                  0.90, '#86efac',   // light green
+                  1.0,  '#f0fdf4',   // near-white
+                ],
+                'circle-opacity': 0.80,
                 'circle-stroke-width': 0.5,
-                'circle-stroke-color': 'rgba(255,255,255,0.2)',
+                'circle-stroke-color': 'rgba(255,255,255,0.25)',
               }}
             />
           </Source>
@@ -434,12 +451,18 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
 
         {/* Map legend */}
         <div className="map-legend">
-          <div className="legend-grad-label">OAE Suitability</div>
-          <div className="legend-row"><div className="legend-swatch" style={{ background: '#22c55e' }} /><span>High (&gt;85%)</span></div>
-          <div className="legend-row"><div className="legend-swatch" style={{ background: '#f59e0b' }} /><span>Medium (70–85%)</span></div>
-          <div className="legend-row"><div className="legend-swatch" style={{ background: '#ef4444' }} /><span>Low (&lt;70%)</span></div>
+          <div className="legend-grad-label">OAE Suitability Score</div>
+          <div className="legend-row"><div className="legend-swatch" style={{ background: '#86efac', borderRadius: '50%' }} /><span>Premium (&gt;90%) — S. Ocean / EBUS</span></div>
+          <div className="legend-row"><div className="legend-swatch" style={{ background: '#4ade80', borderRadius: '50%' }} /><span>High (70–90%) — mid-latitudes</span></div>
+          <div className="legend-row"><div className="legend-swatch" style={{ background: '#22d3ee', borderRadius: '50%' }} /><span>Moderate (50–70%)</span></div>
+          <div className="legend-row"><div className="legend-swatch" style={{ background: '#60a5fa', borderRadius: '50%' }} /><span>Marginal (25–50%)</span></div>
           <div className="legend-rule" />
-          <div className="legend-row"><div className="legend-swatch" /><span>MPA Zone</span></div>
+          <div className="legend-grad-label">Dot size = wind speed</div>
+          <div className="legend-row" style={{ fontSize: 9.5, color: 'var(--text-3)', lineHeight: 1.3 }}>
+            <span>Larger = stronger winds → faster CO₂ uptake (k ∝ u²)</span>
+          </div>
+          <div className="legend-rule" />
+          <div className="legend-row"><div className="legend-swatch" style={{ background: '#ef4444', opacity: 0.5 }} /><span>MPA Zone</span></div>
           {stations && (
             <>
               <div className="legend-rule" />
@@ -448,6 +471,11 @@ export function GlobalIntelligence({ fleet }: GlobalIntelligenceProps) {
               <div className="legend-row"><div className="legend-swatch" style={{ background: '#ef4444', borderRadius: '50%' }} /><span>25°C</span></div>
             </>
           )}
+          <div className="legend-rule" />
+          <div style={{ fontSize: 8.5, color: 'var(--text-3)', lineHeight: 1.4, paddingTop: 2 }}>
+            Sources: NOAA OISST v2.1 · QuikSCAT/ASCAT wind<br/>
+            Score: SST×0.30 + Wind×0.30 + Lat×0.25 + Upwelling
+          </div>
         </div>
       </div>
 

@@ -43,6 +43,7 @@
 - [x] Mode 3: Route Planning (Click-to-add waypoints, route LineString, per-segment CO₂ estimates, AIS traffic markers)
 - [x] CalCOFI oceanographic data integration (`GET /oceanographic`, 18 real stations in `data/mock/calcofi_stations.json`)
 - [x] Enhanced MarineTraffic vessel traffic (`GET /traffic`, 5 mock AIS vessels, directional triangle markers)
+- [x] Real global OAE hotspots (`GET /global-hotspots`, replaced mock grid with 4-factor scientifically scored data using NOAA OISST and QuikSCAT wind, applied geographic jitter and >0.70 filtering for organic appearance)
 - [x] Discovery Mode / AI-recommended deployment zones (`POST /discover` using SpatialIntelligenceAgent, glowing pulse markers)
 - [x] Google ADK setup and base agent scaffold (`backend/agents/base.py`, `POST /agent` endpoint, Gemini 2.0 Flash + fallback)
 - [x] Agent 1: Spatial Intelligence (`backend/agents/spatial_intelligence.py`, site selection from CalCOFI grid)

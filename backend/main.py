@@ -3,6 +3,9 @@ FastAPI backend for The Tiered Edge Fleet
 OAE Simulation Platform
 """
 
+from dotenv import load_dotenv
+load_dotenv()  # loads backend/.env into os.environ before anything else
+
 import json
 import hashlib
 import subprocess
