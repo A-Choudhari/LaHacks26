@@ -242,5 +242,4 @@ frontend/dist/
 *.swo
 
 # Data
-data/mrv_log.jsonl
-data/real/ais_live.json
+data/*
