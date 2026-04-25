@@ -1,0 +1,1 @@
+/Users/thaaraksriram/workspace/LaHacks26/.claude/skills/gstack/open-gstack-browser/SKILL.md

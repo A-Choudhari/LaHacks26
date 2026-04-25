@@ -1,0 +1,1 @@
+/Users/thaaraksriram/workspace/LaHacks26/.claude/skills/gstack/design-html/SKILL.md
