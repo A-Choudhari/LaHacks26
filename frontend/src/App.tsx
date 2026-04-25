@@ -358,12 +358,16 @@ function ImpactMetrics({ result, fleet }: { result?: SimulationResult; fleet?: S
 // ─── Mode 1: Global Intelligence ─────────────────────────────────────────────
 
 function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
-  const { data: stations } = useQuery<CalCOFIStation[]>({
+  const { data: stations, isLoading, error } = useQuery<CalCOFIStation[]>({
     queryKey: ['oceanographic'],
-    queryFn: () => fetch(`${API_URL}/oceanographic`).then(r => r.json()),
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}/oceanographic`)
+      if (!res.ok) throw new Error('Failed to fetch oceanographic data')
+      return res.json()
+    },
     retry: 1,
   })
-  const [selectedZone, setSelectedZone] = useState<any>(null)
+
   const [discoveryZones, setDiscoveryZones] = useState<DiscoveryZone[]>([])
   const [isDiscovering, setIsDiscovering] = useState(false)
 
@@ -377,14 +381,25 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
     }
   }
 
+  // Safe stations array
+  const safeStations = Array.isArray(stations) ? stations : []
+
   const stationsGeoJSON = {
     type: 'FeatureCollection' as const,
-    features: (stations ?? []).map(s => ({
+    features: safeStations.map(s => ({
       type: 'Feature' as const,
       properties: { id: s.station_id, temp: s.temperature_c, sal: s.salinity_psu, score: s.suitability_score },
       geometry: { type: 'Point' as const, coordinates: [s.lon, s.lat] },
     })),
   }
+
+  // Calculate averages safely
+  const avgTemp = safeStations.length > 0
+    ? (safeStations.reduce((sum, s) => sum + s.temperature_c, 0) / safeStations.length).toFixed(1)
+    : 'N/A'
+  const avgSalinity = safeStations.length > 0
+    ? (safeStations.reduce((sum, s) => sum + s.salinity_psu, 0) / safeStations.length).toFixed(2)
+    : 'N/A'
 
   return (
     <div className="mode-layout">
@@ -392,12 +407,12 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
         <div className="panel">
           <h2>Global Intelligence</h2>
           <p className="mode-desc">Candidate OAE zones ranked by alkalinity uptake potential, MPA avoidance, and mixed-layer depth.</p>
+
           <div className="zone-list">
-            {OAE_ZONES.features.map(f => (
+            {OAE_ZONES.features.map((f, idx) => (
               <div
-                key={f.properties.name}
+                key={idx}
                 className={`zone-card zone-${f.properties.score > 0.85 ? 'high' : f.properties.score > 0.7 ? 'med' : 'low'}`}
-                onClick={() => setSelectedZone(selectedZone?.name === f.properties.name ? null : f.properties)}
               >
                 <div className="zone-name">{f.properties.name}</div>
                 <div className="zone-score">Score: {(f.properties.score * 100).toFixed(0)}%</div>
@@ -405,13 +420,17 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
               </div>
             ))}
           </div>
-          {stations && (
-            <div className="calcofi-summary">
-              <h4>CalCOFI Stations ({stations.length})</h4>
-              <p>Avg temp: {(stations.reduce((s, x) => s + x.temperature_c, 0) / stations.length).toFixed(1)}°C</p>
-              <p>Avg salinity: {(stations.reduce((s, x) => s + x.salinity_psu, 0) / stations.length).toFixed(2)} PSU</p>
-            </div>
-          )}
+
+          <div className="calcofi-summary">
+            <h4>CalCOFI Stations {isLoading ? '(Loading...)' : `(${safeStations.length})`}</h4>
+            {error && <p style={{ color: '#ef4444' }}>Error loading data</p>}
+            {safeStations.length > 0 && (
+              <>
+                <p>Avg temp: {avgTemp}°C</p>
+                <p>Avg salinity: {avgSalinity} PSU</p>
+              </>
+            )}
+          </div>
 
           <div style={{ marginTop: 16 }}>
             <button onClick={runDiscovery} disabled={isDiscovering} style={{ width: '100%' }}>
@@ -435,26 +454,60 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
 
       <div className="map-container">
         <Map
-          initialViewState={{ longitude: -119, latitude: 33, zoom: 4.5 }}
+          initialViewState={{ longitude: -120, latitude: 34, zoom: 5 }}
           style={{ width: '100%', height: '100%' }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           mapboxAccessToken={MAPBOX_TOKEN}
-          interactiveLayerIds={['oae-zones-fill']}
-          onClick={e => {
-            const feat = e.features?.[0]
-            if (feat) setSelectedZone(feat.properties)
-          }}
         >
           {/* OAE deployment zones */}
           <Source id="oae-zones" type="geojson" data={OAE_ZONES}>
-            <Layer id="oae-zones-fill" type="fill" paint={{ 'fill-color': ['interpolate',['linear'],['get','score'],0.0,'#ef4444',0.7,'#f59e0b',0.9,'#22c55e'], 'fill-opacity': 0.25 }} />
-            <Layer id="oae-zones-outline" type="line" paint={{ 'line-color': ['interpolate',['linear'],['get','score'],0.0,'#ef4444',0.7,'#f59e0b',0.9,'#22c55e'], 'line-width': 2 }} />
+            <Layer
+              id="oae-zones-fill"
+              type="fill"
+              paint={{
+                'fill-color': [
+                  'case',
+                  ['>=', ['get', 'score'], 0.85], '#22c55e',
+                  ['>=', ['get', 'score'], 0.7], '#f59e0b',
+                  '#ef4444'
+                ],
+                'fill-opacity': 0.3
+              }}
+            />
+            <Layer
+              id="oae-zones-outline"
+              type="line"
+              paint={{
+                'line-color': [
+                  'case',
+                  ['>=', ['get', 'score'], 0.85], '#22c55e',
+                  ['>=', ['get', 'score'], 0.7], '#f59e0b',
+                  '#ef4444'
+                ],
+                'line-width': 2
+              }}
+            />
           </Source>
 
           {/* CalCOFI oceanographic stations */}
-          {stations && (
+          {safeStations.length > 0 && (
             <Source id="calcofi" type="geojson" data={stationsGeoJSON}>
-              <Layer id="calcofi-circles" type="circle" paint={{ 'circle-radius': 6, 'circle-color': ['interpolate',['linear'],['get','temp'],10,'#3b82f6',18,'#f59e0b',25,'#ef4444'], 'circle-opacity': 0.85, 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 }} />
+              <Layer
+                id="calcofi-circles"
+                type="circle"
+                paint={{
+                  'circle-radius': 7,
+                  'circle-color': [
+                    'case',
+                    ['>=', ['get', 'temp'], 18], '#ef4444',
+                    ['>=', ['get', 'temp'], 14], '#f59e0b',
+                    '#3b82f6'
+                  ],
+                  'circle-opacity': 0.9,
+                  'circle-stroke-color': '#ffffff',
+                  'circle-stroke-width': 1
+                }}
+              />
             </Source>
           )}
 
@@ -480,23 +533,15 @@ function GlobalIntelligenceMode({ fleet }: { fleet?: ShipStatus[] }) {
           ))}
         </Map>
 
-        {selectedZone && (
-          <div className="zone-tooltip">
-            <button className="zone-tooltip-close" onClick={() => setSelectedZone(null)}>✕</button>
-            <strong>{selectedZone.name}</strong>
-            <p>{selectedZone.reason}</p>
-          </div>
-        )}
-
         <div className="map-legend">
           <div className="legend-title">OAE Zone Suitability</div>
           <div className="legend-item"><div className="swatch" style={{ background: '#22c55e' }} /><span>High (&gt;85%)</span></div>
           <div className="legend-item"><div className="swatch" style={{ background: '#f59e0b' }} /><span>Medium (70-85%)</span></div>
           <div className="legend-item"><div className="swatch" style={{ background: '#ef4444' }} /><span>Low (&lt;70%)</span></div>
           <div className="legend-item"><div className="legend-mpa" /><span>MPA Boundary</span></div>
-          {stations && <div className="legend-title" style={{ marginTop: 8 }}>CalCOFI (by temp)</div>}
-          {stations && <div className="legend-item"><div className="swatch swatch-circle" style={{ background: '#3b82f6' }} /><span>10°C</span></div>}
-          {stations && <div className="legend-item"><div className="swatch swatch-circle" style={{ background: '#ef4444' }} /><span>25°C</span></div>}
+          {safeStations.length > 0 && <div className="legend-title" style={{ marginTop: 8 }}>CalCOFI (by temp)</div>}
+          {safeStations.length > 0 && <div className="legend-item"><div className="swatch swatch-circle" style={{ background: '#3b82f6' }} /><span>Cold</span></div>}
+          {safeStations.length > 0 && <div className="legend-item"><div className="swatch swatch-circle" style={{ background: '#ef4444' }} /><span>Warm</span></div>}
         </div>
       </div>
     </div>
