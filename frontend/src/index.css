@@ -1,0 +1,462 @@
+/* The Tiered Edge Fleet - OAE Platform Styles */
+
+:root {
+  --bg-dark: #0a1929;
+  --bg-panel: #132f4c;
+  --border: #1e4976;
+  --text: #b2bac2;
+  --text-bright: #ffffff;
+  --accent: #00d4ff;
+  --success: #4caf50;
+  --warning: #ff9800;
+  --danger: #f44336;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  color: var(--text-bright);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+header .subtitle {
+  color: var(--accent);
+  font-size: 0.875rem;
+}
+
+main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 320px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: relative;
+  z-index: 20;
+}
+
+.sidebar.right {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+
+.map-container {
+  flex: 1;
+  position: relative;
+}
+
+/* Panels */
+.panel {
+  padding: 1.25rem;
+  background: var(--bg-dark);
+}
+
+.panel h2 {
+  color: var(--text-bright);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Simulation panel */
+.param-group {
+  margin-bottom: 1rem;
+}
+
+.param-group label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+
+.param-group input[type="range"] {
+  width: calc(100% - 3rem);
+  accent-color: var(--accent);
+}
+
+.param-group span {
+  display: inline-block;
+  width: 2.5rem;
+  text-align: right;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.param-group select {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-bright);
+}
+
+button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--accent);
+  color: var(--bg-dark);
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Simulation result */
+.result {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 4px;
+  background: var(--bg-panel);
+}
+
+.result.safe {
+  border-left: 3px solid var(--success);
+}
+
+.result.unsafe {
+  border-left: 3px solid var(--danger);
+}
+
+.result h3 {
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.result.safe h3 {
+  color: var(--success);
+}
+
+.result.unsafe h3 {
+  color: var(--danger);
+}
+
+.result p {
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.result .failures {
+  margin-top: 0.5rem;
+  padding-left: 1rem;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+/* Fleet panel */
+.fleet-summary {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.metric {
+  flex: 1;
+  text-align: center;
+  padding: 0.75rem;
+  background: var(--bg-panel);
+  border-radius: 4px;
+}
+
+.metric .value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.metric .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ship-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ship-card {
+  padding: 0.75rem;
+  background: var(--bg-panel);
+  border-radius: 4px;
+  border-left: 3px solid var(--border);
+}
+
+.ship-card.active {
+  border-left-color: var(--success);
+}
+
+.ship-card.deploying {
+  border-left-color: var(--accent);
+}
+
+.ship-card.idle {
+  border-left-color: var(--warning);
+}
+
+.ship-name {
+  font-weight: 600;
+  color: var(--text-bright);
+  font-size: 0.875rem;
+}
+
+.ship-status {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  margin: 0.25rem 0;
+}
+
+.ship-co2 {
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+/* AI panel */
+.ai-panel button {
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.ai-panel button:hover {
+  background: var(--accent);
+  color: var(--bg-dark);
+}
+
+.analysis {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--bg-panel);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.analysis pre {
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+.analysis-section {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.analysis-section:last-of-type {
+  margin-bottom: 0.5rem;
+  border-bottom: none;
+}
+
+.analysis-section h4 {
+  color: var(--accent);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.analysis-section p {
+  color: var(--text-bright);
+  line-height: 1.6;
+}
+
+.analysis-section ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.analysis-section li {
+  margin-bottom: 0.25rem;
+  color: var(--text);
+}
+
+.analysis-meta {
+  font-size: 0.7rem;
+  color: var(--text);
+  text-align: right;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.error {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid var(--danger);
+  color: var(--danger);
+  font-size: 0.8rem;
+}
+
+/* Ship markers */
+.ship-marker {
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.ship-marker:hover {
+  transform: scale(1.2);
+}
+
+.ship-marker.deploying {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Map legend */
+.map-legend {
+  position: absolute;
+  bottom: 2rem;
+  left: 1rem;
+  background: rgba(15, 23, 42, 0.9);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  z-index: 10;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.7rem;
+  color: var(--text);
+}
+
+.legend-mpa {
+  width: 16px;
+  height: 16px;
+  background: rgba(239, 68, 68, 0.3);
+  border: 2px dashed #ef4444;
+  border-radius: 2px;
+}
+
+.legend-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.legend-gradient {
+  width: 150px;
+  height: 12px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    rgba(0, 100, 255, 0.8),
+    rgba(0, 200, 255, 0.8),
+    rgba(0, 255, 200, 0.8),
+    rgba(100, 255, 100, 0.8),
+    rgba(255, 255, 0, 0.8),
+    rgba(255, 100, 0, 0.9)
+  );
+}
+
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  color: var(--text);
+}
+
+/* Impact metrics overlay */
+.impact-metrics {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1rem;
+  z-index: 10;
+}
+
+.impact-card {
+  background: rgba(15, 23, 42, 0.9);
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  text-align: center;
+  min-width: 120px;
+}
+
+.impact-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.impact-value.safe {
+  color: var(--success);
+}
+
+.impact-value.unsafe {
+  color: var(--danger);
+}
+
+.impact-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  margin-top: 0.25rem;
+}

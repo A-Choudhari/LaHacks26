@@ -1,5 +1,83 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**The Tiered Edge Fleet** is an Ocean Alkalinity Enhancement (OAE) simulation platform for LA Hacks 2026. It simulates chemical plume dispersion from ship-based alkalinity deployment, with AI-powered safety analysis.
+
+Target hardware: ASUS Ascent GX10 (NVIDIA GB10 Grace Blackwell, 128GB unified memory)
+
+Judging tracks: Sustainability, ASUS Challenge, Arista Networks "Connect the Dots", Best Use of Google Gemma
+
+## Development Commands
+
+### Backend (FastAPI)
+```bash
+cd backend
+source venv/bin/activate
+uvicorn main:app --port 8001 --reload
+```
+
+### Frontend (React + Vite)
+```bash
+cd frontend
+npm run dev      # Dev server on port 3000
+npm run build    # Production build
+```
+
+### Smoke Test (verify all components)
+```bash
+./smoke_test.sh
+```
+
+### Ollama/Gemma (AI analysis)
+```bash
+ollama serve                    # Terminal 1
+ollama pull gemma2              # Terminal 2 (first time only)
+```
+
+## Architecture
+
+```
+React + Mapbox (3000) ←→ FastAPI (8001) ←→ Julia/Oceananigans (optional)
+        ↓                      ↓
+   2D Heatmap            Gemma 2 via Ollama
+   MPA Overlays          (fallback: rule-based)
+   Fleet Dashboard
+```
+
+### Data Flow
+1. Frontend sends simulation params to `POST /simulate`
+2. Backend runs Julia subprocess OR returns mock data from `data/mock/`
+3. Frontend renders alkalinity heatmap on Mapbox
+4. User clicks "Analyze" → `POST /analyze` → Gemma 2 safety assessment
+
+### Key Files
+- `backend/main.py` - FastAPI server with /health, /simulate, /fleet, /analyze endpoints
+- `frontend/src/App.tsx` - Single-file React app with all components
+- `julia/plume_simulator.jl` - Oceananigans.jl LES simulation (requires Julia + CUDA)
+- `data/mock/plume_simulation.json` - Pre-computed fallback data
+
+### Safety Thresholds (from OAE research)
+- Ω_aragonite > 30.0 → runaway carbonate precipitation (UNSAFE)
+- Total alkalinity > 3500 µmol/kg → olivine toxicity (UNSAFE)
+
+## Offline-First Design
+
+The platform must work without internet (ship at sea scenario):
+- Backend auto-detects Julia availability and falls back to mock data
+- AI analysis falls back to rule-based logic if Ollama unavailable
+- All external API data is mocked (MarineTraffic, CalCOFI)
+
+## Environment Variables
+
+Frontend (`frontend/.env`):
+```
+VITE_MAPBOX_TOKEN=your-code
+VITE_API_URL=http://localhost:8001  # optional
+```
+
 ## gstack
 
 Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.

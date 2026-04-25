@@ -149,6 +149,9 @@ activemq-data/
 
 # Environments
 .env
+.env.local
+frontend/.env
+frontend/.env.example
 .envrc
 .venv
 env/
@@ -216,3 +219,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend build output
+frontend/dist/
+
+# Claude Code / gstack
+.claude/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

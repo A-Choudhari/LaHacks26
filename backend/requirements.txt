@@ -1,0 +1,19 @@
+# The Tiered Edge Fleet - Backend Dependencies
+
+# Web framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+
+# Utilities
+python-multipart>=0.0.6
+httpx>=0.26.0
+
+# For mock data generation
+numpy>=1.26.0
+
+# Google ADK for Gemma agent
+google-adk>=0.1.0
+
+# OpenAI-compatible client for Ollama
+openai>=1.12.0
