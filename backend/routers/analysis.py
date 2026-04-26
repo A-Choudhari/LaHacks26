@@ -28,7 +28,7 @@ class AnalysisResponse(BaseModel):
     model_used: str
 
 
-async def query_ollama(prompt: str, model: str = "gemma4:e4b") -> str:
+async def query_ollama(prompt: str, model: str = "gemma4:31b") -> str:
     """Query Ollama API with a prompt"""
     import httpx
 
@@ -129,7 +129,7 @@ async def analyze_simulation(request: AnalysisRequest):
             co2_projection=co2_text,
             recommendations=recommendations,
             confidence=0.85,
-            model_used="gemma4:e4b",
+            model_used="gemma4:31b",
         )
 
     # Pure rule-based fallback
