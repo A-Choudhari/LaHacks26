@@ -1,5 +1,5 @@
 """
-ADK agents for The Tiered Edge Fleet.
+ADK agents for OceanOps.
 """
 
 from .spatial_intelligence import SpatialIntelligenceAgent

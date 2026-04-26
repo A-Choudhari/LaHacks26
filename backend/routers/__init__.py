@@ -1,5 +1,5 @@
 """
-FastAPI routers for The Tiered Edge Fleet backend.
+FastAPI routers for OceanOps backend.
 """
 
 from .health import router as health_router

@@ -1,5 +1,5 @@
 """
-NATS client singleton for The Tiered Edge Fleet.
+NATS client singleton for OceanOps.
 Manages connection lifecycle and provides publish/subscribe utilities.
 """
 

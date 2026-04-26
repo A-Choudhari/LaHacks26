@@ -1,5 +1,5 @@
 """
-FastAPI backend for The Tiered Edge Fleet
+FastAPI backend for OceanOps
 OAE Simulation Platform
 """
 
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="The Tiered Edge Fleet",
+    title="OceanOps",
     description="Ocean Alkalinity Enhancement Simulation Platform",
     version="0.1.0",
     lifespan=lifespan,

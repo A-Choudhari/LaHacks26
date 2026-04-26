@@ -1,5 +1,5 @@
 Role and Objective
-You are an Expert Full-Stack AI and Scientific Computing Engineer. Your task is to architect and build a comprehensive, local-first Ocean Alkalinity Enhancement (OAE) planning and simulation platform called "The Tiered Edge Fleet."
+You are an Expert Full-Stack AI and Scientific Computing Engineer. Your task is to architect and build a comprehensive, local-first Ocean Alkalinity Enhancement (OAE) planning and simulation platform called "OceanOps."
 We are building this for a hackathon, and the project must run locally without cloud dependency to simulate a ship operating in the open ocean.
 Hardware Environment
 The core server is the ASUS Ascent GX10, an ultra-small desktop AI supercomputer powered by the NVIDIA GB10 Grace Blackwell Superchip with 128GB of unified system memory and 1 petaFLOP of AI performance. It runs on NVIDIA DGX OS (Ubuntu Linux). The massive unified memory allows us to run heavy fluid dynamics simulations and large AI models concurrently on-device.
@@ -13,12 +13,12 @@ Phase 1: Environment & Simulation Setup (The ASUS Heavy Edge)
 Goal: Set up the local environment capable of running high-resolution Nonhydrostatic Large Eddy Simulations (LES) for the OAE chemical plume, taking in complex hydrodynamic variables and outputting advanced visualization data.
 Tasks:
 Initialize a Python backend (FastAPI) and set up the project directory structure.
-Write a Julia script (plume_simulator.jl) utilizing the Oceananigans.jl library. This script must go beyond basic inputs and ingest a comprehensive hydrodynamic profile:
+Write a Julia script (plume*simulator.jl) utilizing the Oceananigans.jl library. This script must go beyond basic inputs and ingest a comprehensive hydrodynamic profile:
 Vessel & Discharge Inputs: Vessel speed over ground, waterline length, volume discharge rate, flow velocity at the injection point, and the diameter of the circular area of discharge.
 Feedstock Inputs: Particle radius, particle density, and the specific chemical feedstock (e.g., Olivine vs. Sodium Hydroxide).
-Ocean State Inputs: Baseline temperature, salinity, mixed-layer depth, and background aragonite saturation state ($\Omega_{aragonite}$).
+Ocean State Inputs: Baseline temperature, salinity, mixed-layer depth, and background aragonite saturation state ($\Omega*{aragonite}$).
 Program the simulation to detect sophisticated biogeochemical anomalies. The script must flag the operation as a failure if:
-The aragonite saturation state ($\Omega_{aragonite}$) exceeds 30.0, which triggers spontaneous precipitation of magnesium hydroxide and calcium carbonate (runaway carbonate formation).
+The aragonite saturation state ($\Omega\_{aragonite}$) exceeds 30.0, which triggers spontaneous precipitation of magnesium hydroxide and calcium carbonate (runaway carbonate formation).
 Localized total alkalinity (TA) breaches the toxicological threshold of 3500 µmol/kg (specifically for olivine), which impairs local biological development.
 Create a Python wrapper to execute this Julia script. Instead of returning a simple heatmap, the script must output structured JSON or VTK data tailored for an advanced WebGL frontend. The output must include:
 Coordinate data to render an Isosurface bounding box representing the critical pH threshold.

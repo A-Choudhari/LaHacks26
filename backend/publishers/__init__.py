@@ -1,5 +1,5 @@
 """
-NATS publishers for The Tiered Edge Fleet.
+NATS publishers for OceanOps.
 Each publisher handles a specific data stream.
 """
 

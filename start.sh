@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# start.sh — Full-stack launcher for The Tiered Edge Fleet
+# start.sh — Full-stack launcher for OceanOps
 #
 # Starts (in order):
 #   1. Ollama AI service + Gemma4 model warm-up
@@ -180,7 +180,7 @@ wait_for_port 3000 "Frontend" 30
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}  The Tiered Edge Fleet — all systems launched  ${NC}"
+echo -e "${GREEN}  OceanOps — all systems launched  ${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "  Frontend  →  ${CYAN}http://localhost:3000${NC}"
 echo -e "  Backend   →  ${CYAN}http://localhost:8001${NC}"

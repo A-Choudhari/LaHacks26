@@ -199,7 +199,7 @@ function AppContent() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.15, duration: 0.35 }}
           >
-            The Tiered Edge Fleet
+            OceanOps
           </motion.span>
           <motion.div
             className="header-sep"

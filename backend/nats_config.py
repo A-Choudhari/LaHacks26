@@ -1,5 +1,5 @@
 """
-NATS JetStream configuration for The Tiered Edge Fleet.
+NATS JetStream configuration for OceanOps.
 Defines streams and consumers for message persistence and replay.
 """
 

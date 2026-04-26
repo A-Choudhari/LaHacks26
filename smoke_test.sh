@@ -1,10 +1,10 @@
 #!/bin/bash
-# Smoke test script for The Tiered Edge Fleet
+# Smoke test script for OceanOps
 # Run before demo to verify all components are working
 
 set -e
 
-echo "=== The Tiered Edge Fleet - Smoke Test ==="
+echo "=== OceanOps - Smoke Test ==="
 echo ""
 
 # Configurable ports

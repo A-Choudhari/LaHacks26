@@ -453,7 +453,7 @@ def bench_performance() -> dict:
 def main():
     print("\n" + "═" * 60)
     print("  OAE ALGORITHM BENCHMARKS")
-    print("  The Tiered Edge Fleet — LA Hacks 2026")
+    print("  OceanOps — LA Hacks 2026")
     print("═" * 60)
 
     all_results = {}

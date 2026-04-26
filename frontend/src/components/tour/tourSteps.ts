@@ -7,7 +7,7 @@ export interface TourStep {
 
 export const GLOBAL_TOUR: TourStep[] = [
   {
-    title: 'Welcome to The Tiered Edge Fleet',
+    title: 'Welcome to OceanOps',
     body: 'This platform simulates Ocean Alkalinity Enhancement (OAE) — a carbon removal technique that adds alkaline minerals to seawater, increasing its natural CO₂ absorption. You\'re in <b>Global Intelligence</b> mode: a strategic overview of where on Earth OAE deployment will be most effective.',
   },
   {

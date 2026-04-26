@@ -1,5 +1,5 @@
 """
-Shared utilities for The Tiered Edge Fleet backend.
+Shared utilities for OceanOps backend.
 """
 
 from .ocean_physics import (

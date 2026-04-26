@@ -1,4 +1,4 @@
-# The Tiered Edge Fleet
+# OceanOps
 
 **Ocean Alkalinity Enhancement (OAE) Simulation Platform**
 
@@ -56,6 +56,7 @@ npm run dev
 Frontend runs at `http://localhost:3000` (or the Vite port printed in your console).
 
 **Note:** You'll need a Mapbox token. Create a `.env` file in the `frontend/` directory:
+
 ```
 VITE_MAPBOX_TOKEN=your_mapbox_token_here
 ```
@@ -104,15 +105,15 @@ The project has recently been refactored into a scalable, modular architecture:
 
 The FastAPI backend is separated into modular routers:
 
-| Router | Description |
-|--------|-------------|
-| `/health` | System health and Julia engine status |
-| `/simulate` | Run OAE plume physics simulations |
-| `/fleet` | Fleet ship status and hardware telemetry |
-| `/analyze` | Multi-agent AI safety analysis & CO₂ projection |
-| `/traffic` | Real-time streaming AIS marine traffic |
-| `/discover` | Identifies ideal high-impact OAE zones |
-| `/ocean` | Fetches real-world temperature & salinity data |
+| Router      | Description                                     |
+| ----------- | ----------------------------------------------- |
+| `/health`   | System health and Julia engine status           |
+| `/simulate` | Run OAE plume physics simulations               |
+| `/fleet`    | Fleet ship status and hardware telemetry        |
+| `/analyze`  | Multi-agent AI safety analysis & CO₂ projection |
+| `/traffic`  | Real-time streaming AIS marine traffic          |
+| `/discover` | Identifies ideal high-impact OAE zones          |
+| `/ocean`    | Fetches real-world temperature & salinity data  |
 
 ## Key Features
 
@@ -125,6 +126,7 @@ The FastAPI backend is separated into modular routers:
 ## Hardware Target
 
 Designed for the **ASUS Ascent GX10** with the **NVIDIA GB10 Grace Blackwell Superchip**:
+
 - 128GB unified memory
 - 1 petaFLOP AI performance
 - Built to run complex physics and LLMs completely offline at the edge.

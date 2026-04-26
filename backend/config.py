@@ -1,5 +1,5 @@
 """
-Configuration constants for The Tiered Edge Fleet backend.
+Configuration constants for OceanOps backend.
 """
 
 import os
