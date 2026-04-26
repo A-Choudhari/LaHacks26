@@ -44,7 +44,7 @@ npm run build    # Production build
 ### Ollama/Gemma (AI analysis)
 ```bash
 ollama serve                        # Terminal 1
-ollama run gemma4:e4b               # Terminal 2 (first time — downloads and runs the 4B model)
+ollama run gemma4:31b               # Terminal 2 (first time — downloads and runs the 31B model)
 ```
 
 ## Architecture
@@ -326,7 +326,7 @@ All agents run **fully locally** via Ollama/Gemma4 — no cloud dependency, no A
 
 **Flow for every agent call:**
 1. Tool functions execute deterministically (always — provides hard numbers regardless of LLM state)
-2. Tool results sent to Gemma4 (`gemma4:e4b`) via Ollama for natural-language synthesis
+2. Tool results sent to Gemma4 (`gemma4:31b`) via Ollama for natural-language synthesis
 3. Response parsed as JSON; if malformed or Ollama unreachable, rule-based synthesis used instead
 
 **`backend/agents/base.py`**
@@ -338,12 +338,12 @@ All agents run **fully locally** via Ollama/Gemma4 — no cloud dependency, no A
 **`backend/agents/geochemist.py`** — `GeochemistAgent`
 - Always runs: `check_aragonite_threshold()`, `check_alkalinity_threshold()`, `project_co2_removal()` (deterministic)
 - Gemma4 synthesises: `safety_assessment` (string), `co2_projection` (string), `recommendations` (list)
-- `model_used` field: `"gemma4:e4b (local)"` or `"rule-based-fallback"`
+- `model_used` field: `"gemma4:31b (local)"` or `"rule-based-fallback"`
 
 **`backend/agents/spatial_intelligence.py`** — `SpatialIntelligenceAgent`
 - Always runs: `get_mpa_overlap()`, `get_ocean_state()` (deterministic)
 - Gemma4 synthesises: `suitability_score` (0–1), `reason` (string), `mpa_conflict` (bool)
-- `model_used` field: `"gemma4:e4b (local)"` or `"rule-based-fallback"`
+- `model_used` field: `"gemma4:31b (local)"` or `"rule-based-fallback"`
 
 ### Route Planning — AI Fleet Tab
 
@@ -417,7 +417,7 @@ VITE_API_URL=http://localhost:8001                  # Must be 8001 — backend p
 Backend (optional):
 ```
 OLLAMA_URL=http://localhost:11434  # Override Ollama endpoint (default: localhost:11434)
-GEMMA_MODEL=gemma4:e4b             # Override Gemma model tag (default: gemma4:e4b)
+GEMMA_MODEL=gemma4:31b             # Override Gemma model tag (default: gemma4:31b)
 ```
 
 ## gstack

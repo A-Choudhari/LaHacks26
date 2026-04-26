@@ -79,14 +79,14 @@ if command -v ollama &>/dev/null; then
   fi
 
   # Pull Gemma4 model if not present (silently skip if already there)
-  info "Ensuring gemma4:e4b model is available..."
-  ollama pull gemma4:e4b >"$LOG_DIR/ollama-pull.log" 2>&1 &
+  info "Ensuring gemma4:31b model is available..."
+  ollama pull gemma4:31b >"$LOG_DIR/ollama-pull.log" 2>&1 &
   PULL_PID=$!
 
   # Warm up: send a no-op prompt in the background after pull completes
   ( wait $PULL_PID 2>/dev/null
     echo "Warming Gemma4 model..."
-    ollama run gemma4:e4b "ready" --nowordwrap >/dev/null 2>&1 || true
+    ollama run gemma4:31b "ready" --nowordwrap >/dev/null 2>&1 || true
     success "Gemma4 warm-up complete"
   ) &
 else

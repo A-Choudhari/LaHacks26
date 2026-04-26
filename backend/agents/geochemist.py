@@ -150,7 +150,7 @@ class GeochemistAgent:
             text = await query_gemma(prompt, system=system)
             parsed = extract_json(text)
             if parsed and "safety_assessment" in parsed:
-                parsed["model_used"] = "gemma4:e4b (local)"
+                parsed["model_used"] = "gemma4:31b (local)"
                 parsed.setdefault("confidence", 0.92)
                 parsed["tool_results"] = {"aragonite": arag_r, "alkalinity": alk_r, "co2": co2_r}
                 return parsed

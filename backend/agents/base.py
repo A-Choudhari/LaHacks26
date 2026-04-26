@@ -17,7 +17,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-GEMMA_MODEL = os.getenv("GEMMA_MODEL", "gemma4:e4b")
+GEMMA_MODEL = os.getenv("GEMMA_MODEL", "gemma4:31b")
 
 
 async def is_ollama_available() -> bool:
