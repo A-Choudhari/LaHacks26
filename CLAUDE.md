@@ -90,12 +90,43 @@ ollama run gemma4:e4b               # Terminal 2 (first time — downloads and r
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └───────────────────────────────────┬─────────────────────────────────────────┘
                                     │
-                                    ▼ (optional)
-                    ┌───────────────────────────────────┐
-                    │ Julia / Oceananigans.jl + CUDA    │
-                    │ (GPU LES plume simulation)        │
-                    └───────────────────────────────────┘
+            ┌───────────────────────┴───────────────────────┐
+            │                                               │
+            ▼ (optional)                                    ▼ (optional)
+┌───────────────────────────────────┐     ┌─────────────────────────────────────┐
+│ Julia / Oceananigans.jl + CUDA    │     │      NATS Server (JetStream)        │
+│ (GPU LES plume simulation)        │     │  • Real-time event streaming        │
+└───────────────────────────────────┘     │  • WebSocket for browser (nats.ws)  │
+                                          │  • Offline buffering + replay       │
+                                          └─────────────────────────────────────┘
 ```
+
+### NATS Real-Time Streaming (Optional)
+
+When NATS server is running, the platform switches from HTTP polling to real-time event streaming:
+
+| Subject | Update Rate | Data |
+|---------|-------------|------|
+| `health.backend` | 1s | System health status |
+| `fleet.*.position` | 1Hz | Ship positions + heading |
+| `fleet.*.status` | On change | Ship status changes |
+| `ais.batch` | 2s | Batched AIS vessel positions |
+
+**Benefits:**
+- Sub-second updates (1-2s vs 5-30s polling)
+- Offline buffering via JetStream persistence
+- Message replay on reconnect
+- Automatic fallback to HTTP when NATS unavailable
+
+**Files:**
+- `nats-server.conf` — Server config (port 4222, WebSocket 9222)
+- `backend/nats_client.py` — Python singleton connection manager
+- `backend/nats_config.py` — JetStream stream/consumer definitions
+- `backend/publishers/` — Health, fleet, AIS publishers
+- `frontend/src/lib/nats.ts` — Browser WebSocket client
+- `frontend/src/hooks/useNatsSubscription.ts` — React subscription hook
+- `frontend/src/context/NatsContext.tsx` — Connection state provider
+- `frontend/src/lib/offlineQueue.ts` — localStorage event buffer
 
 ### Three-Mode UI System
 1. **Global Intelligence (Mode 1)**: Pacific-centered view with CalCOFI oceanographic data, OAE zone scoring, MPA overlays, and AI-recommended deployment zones via `/discover`
@@ -411,6 +442,8 @@ Frontend (`frontend/.env`):
 ```
 VITE_MAPBOX_TOKEN=pk.eyJ1IjoidHNyaXJhbSIsImEi...  # Mapbox GL token
 VITE_API_URL=http://localhost:8001                  # Must be 8001 — backend port
+VITE_NATS_WS_URL=ws://localhost:9222               # NATS WebSocket endpoint (optional)
+VITE_USE_NATS=true                                  # Enable NATS streaming (optional)
 ```
 **Critical**: `VITE_API_URL` must be `8001`. The Vite config proxies `/api` → `8001`, but direct `API_URL` calls (used throughout) bypass the proxy and hit this env var directly. Using `8000` silently breaks all simulation, fleet, and AI endpoints.
 
@@ -418,6 +451,7 @@ Backend (optional):
 ```
 OLLAMA_URL=http://localhost:11434  # Override Ollama endpoint (default: localhost:11434)
 GEMMA_MODEL=gemma4:e4b             # Override Gemma model tag (default: gemma4:e4b)
+NATS_URL=nats://localhost:4222     # NATS server URL (default: localhost:4222)
 ```
 
 ## gstack

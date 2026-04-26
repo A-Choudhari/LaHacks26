@@ -94,7 +94,28 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. Backend (FastAPI)
+# 2. NATS Server (optional - for real-time streaming)
+# ─────────────────────────────────────────────────────────────────────────────
+if command -v nats-server &>/dev/null; then
+  if ! pgrep -x nats-server &>/dev/null; then
+    info "Starting NATS server on :4222 (WebSocket :9222)..."
+    nats-server -c "$REPO/nats-server.conf" >"$LOG_DIR/nats.log" 2>&1 &
+    track_pid $!
+    sleep 1
+    if nc -z localhost 4222 2>/dev/null; then
+      success "NATS server ready"
+    else
+      warn "NATS server did not start (streaming disabled)"
+    fi
+  else
+    info "NATS server already running"
+  fi
+else
+  info "nats-server not found — real-time streaming disabled, using HTTP polling"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Backend (FastAPI)
 # ─────────────────────────────────────────────────────────────────────────────
 info "Starting FastAPI backend on :8001..."
 cd "$REPO/backend"
@@ -108,7 +129,7 @@ cd "$REPO"
 wait_for_port 8001 "Backend" 30
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. Julia / Oceananigans CUDA warmup (optional, background)
+# 4. Julia / Oceananigans CUDA warmup (optional, background)
 # ─────────────────────────────────────────────────────────────────────────────
 if [[ "$SKIP_JULIA" == false ]] && command -v julia &>/dev/null; then
   if [[ -f "$REPO/julia/plume_simulator.jl" ]]; then
@@ -143,7 +164,7 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. Frontend (React + Vite)
+# 5. Frontend (React + Vite)
 # ─────────────────────────────────────────────────────────────────────────────
 info "Starting React frontend on :3000..."
 cd "$REPO/frontend"
@@ -164,6 +185,9 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "  Frontend  →  ${CYAN}http://localhost:3000${NC}"
 echo -e "  Backend   →  ${CYAN}http://localhost:8001${NC}"
 echo -e "  API docs  →  ${CYAN}http://localhost:8001/docs${NC}"
+if nc -z localhost 4222 2>/dev/null; then
+  echo -e "  NATS      →  ${CYAN}nats://localhost:4222${NC} (WS: 9222)"
+fi
 echo -e "  Logs      →  ${YELLOW}$LOG_DIR/${NC}"
 echo -e "  Stop all  →  ${YELLOW}./start.sh --stop${NC}"
 echo ""

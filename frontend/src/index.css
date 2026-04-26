@@ -1700,6 +1700,23 @@ header {
 .header-chip.chip-ok  { color: var(--success); border-color: rgba(74,222,128,0.2); }
 .header-chip.chip-off { color: var(--danger);  border-color: rgba(248,113,113,0.2); }
 
+/* NATS reconnecting spinner */
+.nats-reconnect-spinner {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--warning);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: nats-spin 0.8s linear infinite;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+@keyframes nats-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Responsive: narrow viewport ─────────────────────── */
 
 @media (max-width: 1100px) {
