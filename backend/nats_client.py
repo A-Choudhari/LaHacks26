@@ -77,7 +77,8 @@ class NATSClient:
             self._nc = await _nats_module.connect(
                 servers=[NATS_URL],
                 reconnect_time_wait=5,
-                max_reconnect_attempts=10,
+                max_reconnect_attempts=0,  # fail fast; don't block startup
+                connect_timeout=3,
                 error_cb=self._on_error,
                 disconnected_cb=self._on_disconnect,
                 reconnected_cb=self._on_reconnect,

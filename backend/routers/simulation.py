@@ -143,19 +143,67 @@ async def run_simulation(request: SimulationRequest):
         except Exception:
             pass
 
-        data = await run_julia_simulation(request)
-        result = SimulationResult(
-            status=data["status"],
-            safety_failures=data["safety_failures"],
-            coordinates=data["coordinates"],
-            fields=data["fields"],
-            summary=data["summary"],
-            params=data["params"],
-            timestamp=timestamp,
-            source="live",
-            ocean_state_source=ocean_state["source"] if ocean_state else "mock",
-            ocean_conditions=ocean_state,
-        )
+        julia_ok = False
+        try:
+            data = await run_julia_simulation(request)
+            julia_ok = True
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Julia simulation failed, falling back to physics plume: {exc}"
+            )
+
+        if julia_ok:
+            result = SimulationResult(
+                status=data["status"],
+                safety_failures=data["safety_failures"],
+                coordinates=data["coordinates"],
+                fields=data["fields"],
+                summary=data["summary"],
+                params=data["params"],
+                timestamp=timestamp,
+                source="live",
+                ocean_state_source=ocean_state["source"] if ocean_state else "mock",
+                ocean_conditions=ocean_state,
+            )
+        elif ocean_state:
+            # Julia failed but we have real ocean conditions — physics fallback
+            data = generate_plume_from_conditions(
+                temperature_c=ocean_state["temperature_c"],
+                salinity_psu=ocean_state["salinity_psu"],
+                mld_m=ocean_state["mixed_layer_depth_m"],
+                baseline_alk=ocean_state["baseline_alkalinity_umol_kg"],
+                vessel_speed=request.vessel.vessel_speed,
+                discharge_rate=request.vessel.discharge_rate,
+                feedstock_type=request.feedstock.feedstock_type,
+            )
+            result = SimulationResult(
+                **data,
+                timestamp=timestamp,
+                source="live-conditions",
+                ocean_state_source=ocean_state["source"],
+                ocean_conditions={
+                    "temperature_c": ocean_state["temperature_c"],
+                    "salinity_psu": ocean_state["salinity_psu"],
+                    "mixed_layer_depth_m": ocean_state["mixed_layer_depth_m"],
+                    "baseline_alkalinity_umol_kg": ocean_state["baseline_alkalinity_umol_kg"],
+                    "fetched_at": ocean_state["fetched_at"],
+                },
+            )
+        else:
+            # Full offline fallback
+            data = load_mock_data()
+            result = SimulationResult(
+                status=data["status"],
+                safety_failures=data["safety_failures"],
+                coordinates=data["coordinates"],
+                fields=data["fields"],
+                summary=data["summary"],
+                params=data["params"],
+                timestamp=timestamp,
+                source="mock",
+                ocean_state_source="mock",
+            )
 
     result.mrv_hash = compute_mrv_hash(result)
 
