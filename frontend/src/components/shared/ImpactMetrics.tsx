@@ -55,10 +55,23 @@ export function ImpactMetrics({ result, fleet }: ImpactMetricsProps) {
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
             >
-              <div className={`impact-val ${result.status}`}>
-                {result.status === 'safe' ? 'SAFE' : 'UNSAFE'}
-              </div>
-              <div className="impact-lbl">Deployment Status</div>
+              {result.viability ? (
+                <>
+                  <div className={`impact-val viability-${result.viability.level}`}>
+                    {result.viability.level.toUpperCase()}
+                  </div>
+                  <div className="impact-lbl">
+                    Viability {Math.round(result.viability.viability_score * 100)}%
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className={`impact-val ${result.status}`}>
+                    {result.status === 'safe' ? 'SAFE' : 'UNSAFE'}
+                  </div>
+                  <div className="impact-lbl">Deployment Status</div>
+                </>
+              )}
             </motion.div>
             <motion.div
               className="impact-chip"

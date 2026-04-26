@@ -2581,3 +2581,97 @@ header {
   transition: background 0.18s;
 }
 .apply-params-btn:hover { background: rgba(74,222,128,0.14); }
+
+/* ── Viability level color classes (impact chip + any future use) ─────────── */
+.impact-val.viability-safe    { color: var(--success); }
+.impact-val.viability-caution { color: #a3e635; }
+.impact-val.viability-warning { color: var(--warning); }
+.impact-val.viability-unsafe  { color: var(--danger); }
+
+/* ── Viability gauge ─────────────────────────────────────────────────────── */
+.viability-gauge {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0 4px;
+}
+.viability-ring-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+}
+.viability-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.viability-pct {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+.viability-pct-sym {
+  font-size: 10px;
+  color: var(--text-3);
+  align-self: flex-end;
+  padding-bottom: 3px;
+}
+.viability-text {
+  flex: 1;
+  min-width: 0;
+}
+.viability-level-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.viability-level-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.viability-level-name {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.viability-model {
+  font-size: 9px;
+  color: var(--text-3);
+  margin-left: auto;
+  font-style: italic;
+}
+.viability-summary {
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.45;
+  margin: 0 0 6px;
+}
+.viability-factors {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.viability-factor-row {
+  display: flex;
+  gap: 6px;
+  font-size: 10px;
+}
+.vf-key {
+  color: var(--text-3);
+  text-transform: capitalize;
+  flex-shrink: 0;
+  font-weight: 600;
+  min-width: 64px;
+}
+.vf-val {
+  color: var(--text-2);
+  line-height: 1.35;
+}

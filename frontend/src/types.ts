@@ -23,6 +23,14 @@ export interface OceanConditions {
   fetched_at: string
 }
 
+export interface ViabilityAssessment {
+  viability_score: number          // 0–1, 1 = fully viable
+  level: 'safe' | 'caution' | 'warning' | 'unsafe'
+  summary: string                  // one-sentence AI assessment
+  factors: Record<string, string>  // what drove the score
+  model_used: string
+}
+
 export interface SimulationResult {
   status: 'safe' | 'unsafe'
   safety_failures: string[]
@@ -34,6 +42,7 @@ export interface SimulationResult {
   mrv_hash?: string
   ocean_state_source?: string    // e.g. "noaa_erddap+calcofi"
   ocean_conditions?: OceanConditions
+  viability?: ViabilityAssessment
 }
 
 export interface ShipStatus {

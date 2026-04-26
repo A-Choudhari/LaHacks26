@@ -51,7 +51,7 @@ async def fetch_ocean_state(lat: float, lon: float) -> dict:
         f"?analysed_sst[(last)][({lat - 0.02:.4f}):({lat + 0.02:.4f})][({lon - 0.02:.4f}):({lon + 0.02:.4f})]"
     )
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=3.5) as client:
             resp = await client.get(erddap_url)
         if resp.status_code == 200:
             rows = resp.json().get("table", {}).get("rows", [])
@@ -151,15 +151,25 @@ def generate_plume_from_conditions(
     if feedstock_type == "sodium_hydroxide":
         temp_factor *= 1.6
 
-    peak_delta_alk = min(1400.0, discharge_rate * 1100.0 * temp_factor)
+    # Scale: 400 µmol/kg per (m³/s). No artificial floor cap — extreme discharge
+    # rates must produce unsafe values so the safety system is meaningful.
+    # Cap at 2000 keeps numbers physically interpretable while still exceeding both
+    # the 3500 µmol/kg TA limit (at discharge ≥ ~3 m³/s) and the Ω > 30 aragonite
+    # limit at high temperature. Previous min(1400,...) made Ω > 30 mathematically
+    # impossible since 1400/75 + max_baseline_sat ≈ 23.7 < 30.
+    peak_delta_alk = min(2000.0, discharge_rate * 400.0 * temp_factor)
 
     alkalinity_2d = baseline_alk + peak_delta_alk * np.exp(
         -((X - cx) ** 2 / (2 * sigma_x ** 2) + Y ** 2 / (2 * sigma_y ** 2))
     )
 
-    # Aragonite saturation: baseline rises with temperature, falls with excess salinity
+    # Aragonite-TA coupling is temperature-dependent: warmer water = higher carbonate
+    # ion concentration response per unit TA added (Revelle factor decreases with T).
+    # At 10°C: divisor=57, at 25°C: divisor=35 (clamped). Previous /75 made it
+    # impossible to exceed 30 even with the old 1400 cap.
     baseline_sat = 1.5 + (temperature_c - 5.0) * 0.12 + (35.0 - salinity_psu) * 0.04
-    aragonite_2d = baseline_sat + (alkalinity_2d - baseline_alk) / 75.0
+    arag_divisor = max(35.0, 72.0 - max(0.0, temperature_c - 10.0) * 1.5)
+    aragonite_2d = baseline_sat + (alkalinity_2d - baseline_alk) / arag_divisor
 
     max_alk = float(alkalinity_2d.max())
     max_arag = float(aragonite_2d.max())

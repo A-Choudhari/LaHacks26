@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import type { SimulationResult, ShipStatus } from '../../types'
+import type { SimulationResult, ShipStatus, ViabilityAssessment } from '../../types'
 
 interface HistoryPoint {
   ts: number
@@ -99,6 +99,67 @@ function SafetyBar({ value, limit, label }: { value: number; limit: number; labe
   )
 }
 
+// AI viability gauge — the primary signal from the agent
+function ViabilityGauge({ v }: { v: ViabilityAssessment }) {
+  const pct = Math.round(v.viability_score * 100)
+  const levelColor: Record<string, string> = {
+    safe: 'var(--success)',
+    caution: '#a3e635',
+    warning: 'var(--warning)',
+    unsafe: 'var(--danger)',
+  }
+  const color = levelColor[v.level] ?? 'var(--text-2)'
+  const circumference = 2 * Math.PI * 28
+  const dashOffset = circumference * (1 - v.viability_score)
+
+  return (
+    <div className="viability-gauge">
+      <div className="viability-ring-wrap">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
+          <motion.circle
+            cx="36" cy="36" r="28"
+            fill="none"
+            stroke={color}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: dashOffset }}
+            transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+            transform="rotate(-90 36 36)"
+            style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+          />
+        </svg>
+        <div className="viability-ring-label">
+          <span className="viability-pct" style={{ color }}>{pct}</span>
+          <span className="viability-pct-sym">%</span>
+        </div>
+      </div>
+      <div className="viability-text">
+        <div className="viability-level-row">
+          <span className="viability-level-dot" style={{ background: color }} />
+          <span className="viability-level-name" style={{ color }}>
+            {v.level.charAt(0).toUpperCase() + v.level.slice(1)}
+          </span>
+          <span className="viability-model">{v.model_used}</span>
+        </div>
+        <p className="viability-summary">{v.summary}</p>
+        {Object.keys(v.factors).length > 0 && (
+          <div className="viability-factors">
+            {Object.entries(v.factors).map(([k, val]) => (
+              <div key={k} className="viability-factor-row">
+                <span className="vf-key">{k}</span>
+                <span className="vf-val">{val}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function LiveImpactPanel({ result, fleet, history = [] }: LiveImpactPanelProps) {
   const totalCO2 = fleet?.reduce((sum, s) => sum + s.co2_removed_tons, 0) ?? 0
   const deploying = fleet?.filter(s => s.status === 'deploying').length ?? 0
@@ -152,14 +213,37 @@ export function LiveImpactPanel({ result, fleet, history = [] }: LiveImpactPanel
             exit={{ opacity: 0 }}
             transition={{ type: 'spring', stiffness: 360, damping: 30 }}
           >
-            {/* Safety status banner */}
-            <div className={`impact-status-banner ${result.status}`}>
-              <div className={`impact-status-dot ${result.status}`} />
-              <span>{result.status === 'safe' ? 'All safety thresholds nominal' : 'Safety threshold exceeded'}</span>
+            {/* AI viability assessment — primary signal */}
+            <div className="impact-section-head">
+              AI Viability Assessment
               {result.mrv_hash && (
                 <span className="impact-mrv-tag">✓ MRV:{result.mrv_hash.slice(0, 6)}</span>
               )}
             </div>
+            <AnimatePresence mode="wait">
+              {result.viability ? (
+                <motion.div
+                  key="viability"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                >
+                  <ViabilityGauge v={result.viability} />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="no-viability"
+                  className={`impact-status-banner ${result.status}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <div className={`impact-status-dot ${result.status}`} />
+                  <span>{result.status === 'safe' ? 'All thresholds nominal' : 'Threshold exceeded'}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Chemistry safety bars */}
             <div className="impact-section-head">Chemistry Thresholds</div>

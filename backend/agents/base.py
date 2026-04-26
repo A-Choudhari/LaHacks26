@@ -35,7 +35,7 @@ async def is_ollama_available() -> bool:
         return False
 
 
-async def query_gemma(prompt: str, system: str = "", timeout: float = 45.0) -> str:
+async def query_gemma(prompt: str, system: str = "", timeout: float = 45.0, num_predict: int = 512) -> str:
     """
     Send a prompt to local Gemma4 via Ollama and return the response text.
     Raises on connection failure so callers can fall back to rule-based logic.
@@ -49,7 +49,7 @@ async def query_gemma(prompt: str, system: str = "", timeout: float = 45.0) -> s
         "stream": False,
         "options": {
             "temperature": 0.3,   # low temp for structured JSON output
-            "num_predict": 512,
+            "num_predict": num_predict,
         },
     }
     async with httpx.AsyncClient(timeout=timeout) as client:

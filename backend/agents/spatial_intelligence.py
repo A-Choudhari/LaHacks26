@@ -13,6 +13,7 @@ Agent flow:
 
 import json
 import math
+import re
 import logging
 from pathlib import Path
 
@@ -93,6 +94,88 @@ def _compute_score(ocean: dict, mpa: dict) -> tuple[float, str]:
             reason = f"Marginal site — shallow mixed layer ({mld:.0f}m) limits TA dispersal."
 
     return round(max(0.0, min(1.0, score)), 3), reason
+
+
+# ── Batch scoring (single LLM round-trip for N candidates) ───────────────────
+
+async def score_sites_batch(
+    candidates: list[tuple[float, float]],
+    radius_km: float = 30.0,
+) -> list[dict]:
+    """
+    Score all candidate sites with one Gemma4 call instead of N separate calls.
+
+    Flow:
+      1. Run get_ocean_state + get_mpa_overlap deterministically for every site.
+      2. Pack all results into one prompt → single Ollama round-trip.
+      3. Parse the returned JSON array; fall back per-site to rule-based if the
+         array is missing, malformed, or shorter than expected.
+    """
+    # Step 1 — deterministic tools (all in-process, no I/O)
+    candidate_data = []
+    for lat, lon in candidates:
+        ocean = get_ocean_state(lat, lon)
+        mpa   = get_mpa_overlap(lat, lon, radius_km)
+        candidate_data.append({"lat": lat, "lon": lon, "ocean": ocean, "mpa": mpa})
+
+    # Step 2 — single Gemma4 call
+    try:
+        system = (
+            "You are a marine scientist evaluating Ocean Alkalinity Enhancement sites. "
+            f"You will receive {len(candidate_data)} sites. "
+            "Respond ONLY with a valid JSON array. "
+            f"The array must have exactly {len(candidate_data)} objects, one per site in order. "
+            "Each object: suitability_score (float 0–1), reason (string ≤ 12 words), mpa_conflict (bool)."
+        )
+        lines = []
+        for i, d in enumerate(candidate_data):
+            o = d["ocean"]
+            mpa_flag = f"YES — {d['mpa']['mpa_name']}" if d["mpa"]["overlaps"] else "no"
+            lines.append(
+                f"Site {i+1} (lat={d['lat']:.2f}, lon={d['lon']:.2f}): "
+                f"SST={o['temperature_c']:.1f}°C  sal={o['salinity_psu']:.1f}PSU  "
+                f"MLD={o['mixed_layer_depth_m']:.0f}m  "
+                f"base_score={o['suitability_score']:.2f}  MPA={mpa_flag}"
+            )
+        prompt = (
+            f"Evaluate these {len(candidate_data)} OAE deployment sites and return a "
+            f"JSON array of exactly {len(candidate_data)} objects in the same order.\n\n"
+            + "\n".join(lines)
+        )
+        text = await query_gemma(prompt, system=system, timeout=45.0, num_predict=1024)
+
+        # Extract first JSON array from response
+        m = re.search(r"\[.*\]", text, re.DOTALL)
+        if m:
+            parsed = json.loads(m.group())
+            if isinstance(parsed, list) and len(parsed) == len(candidate_data):
+                results = []
+                for d, p in zip(candidate_data, parsed):
+                    results.append({
+                        "lat": d["lat"],
+                        "lon": d["lon"],
+                        "suitability_score": float(p.get("suitability_score", 0.5)),
+                        "reason": str(p.get("reason", ""))[:120],
+                        "mpa_conflict": bool(p.get("mpa_conflict", d["mpa"]["overlaps"])),
+                        "model_used": "gemma4:e4b (local)",
+                    })
+                return results
+    except Exception as e:
+        logger.info("Batch Gemma4 scoring failed, falling back to rule-based: %s", e)
+
+    # Step 3 — rule-based fallback for every site
+    results = []
+    for d in candidate_data:
+        score, reason = _compute_score(d["ocean"], d["mpa"])
+        results.append({
+            "lat": d["lat"],
+            "lon": d["lon"],
+            "suitability_score": score,
+            "reason": reason,
+            "mpa_conflict": d["mpa"]["overlaps"],
+            "model_used": "rule-based-fallback",
+        })
+    return results
 
 
 # ── Public agent interface ────────────────────────────────────────────────────

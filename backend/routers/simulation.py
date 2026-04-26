@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from config import USE_MOCK
+from agents.geochemist import _compute_viability
 from utils.ocean_physics import (
     fetch_ocean_state,
     generate_plume_from_conditions,
@@ -64,6 +65,7 @@ class SimulationResult(BaseModel):
     mrv_hash: Optional[str] = None       # SHA-256 tamper-evident MRV proof
     ocean_state_source: Optional[str] = None   # "noaa_erddap+calcofi" | "calcofi" | "mock"
     ocean_conditions: Optional[dict] = None    # real T/S/MLD values used in simulation
+    viability: Optional[dict] = None           # AI agent combined viability assessment
 
 
 @router.post("/simulate", response_model=SimulationResult)
@@ -156,4 +158,41 @@ async def run_simulation(request: SimulationRequest):
         )
 
     result.mrv_hash = compute_mrv_hash(result)
+
+    # Deterministic viability scoring — zero latency, no LLM in the hot path.
+    # Gemma4 enrichment happens in the separate /analyze call the user triggers.
+    try:
+        max_arag = result.summary.get("max_aragonite_saturation", 0)
+        max_alk  = result.summary.get("max_total_alkalinity", 2300)
+        temp     = result.params.get("temperature", 15.0)
+        feedstock = result.params.get("feedstock_type", "olivine")
+        discharge = result.params.get("discharge_rate", 0.5)
+
+        det = _compute_viability(max_arag, max_alk, temp, feedstock, discharge)
+
+        lv = det["level"]
+        if lv == "safe":
+            summary = f"Viable — Ω {max_arag:.1f} and TA {max_alk:.0f} µmol/kg within safe limits."
+        elif lv == "caution":
+            primary = next(iter(det["factors"]), "chemistry")
+            summary = f"Viable with caution — {primary} approaching threshold; monitor closely."
+        elif lv == "warning":
+            primary = "aragonite" if det["arag_risk"] >= det["alk_risk"] else "alkalinity"
+            summary = f"Marginal — {primary} near critical limit; consider reducing discharge."
+        else:
+            summary = (
+                f"Not viable — Ω {max_arag:.1f} and/or TA {max_alk:.0f} µmol/kg "
+                f"exceed safe limits."
+            )
+
+        result.viability = {
+            "viability_score": det["viability_score"],
+            "level": det["level"],
+            "summary": summary,
+            "factors": det["factors"],
+            "model_used": "rule-based",
+        }
+    except Exception:
+        pass
+
     return result

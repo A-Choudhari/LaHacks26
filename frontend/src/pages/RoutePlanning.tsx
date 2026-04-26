@@ -151,7 +151,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
   const rafRef  = useRef<number>()
   const t0Ref   = useRef<number>()
 
-  const ANIM_DURATION = 3800 // ms for the full draw
+  const ANIM_DURATION = 1800 // ms for the full draw
 
   // Kick off animation whenever routes are freshly computed
   useEffect(() => {

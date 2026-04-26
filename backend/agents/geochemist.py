@@ -111,6 +111,75 @@ def _rule_based_synthesis(arag: dict, alk: dict, co2: dict, feedstock: str) -> d
     }
 
 
+# ── Viability scoring (deterministic) ────────────────────────────────────────
+
+def _compute_viability(
+    max_aragonite: float,
+    max_alkalinity: float,
+    temperature: float,
+    feedstock: str,
+    discharge_rate: float,
+) -> dict:
+    """
+    Combined deployment viability score. Considers all metrics together rather
+    than checking each threshold independently.
+
+    Returns score 0–1 (1 = fully viable) and a level label.
+    """
+    arag_risk = min(1.0, max(0.0, max_aragonite / _ARAGONITE_LIMIT))
+    alk_risk = min(1.0, max(0.0, max_alkalinity / _ALKALINITY_LIMIT))
+
+    # Worst-case chemistry risk with co-exceedance penalty
+    chem_risk = max(arag_risk, alk_risk)
+    if arag_risk > 0.70 and alk_risk > 0.70:
+        chem_risk = min(1.0, chem_risk + 0.12)
+
+    # Warm water amplifies carbonate chemistry risk
+    temp_penalty = max(0.0, (temperature - 22.0) / 16.0) * 0.12
+
+    # NaOH dissolves faster → less reaction time to detect exceedances
+    feedstock_penalty = 0.07 if feedstock == "sodium_hydroxide" else 0.0
+
+    # High discharge compounds risk even when individual thresholds look OK
+    discharge_penalty = max(0.0, (discharge_rate - 3.0) / 7.0) * 0.08
+
+    total_risk = min(1.0, chem_risk + temp_penalty + feedstock_penalty + discharge_penalty)
+    score = round(1.0 - total_risk, 3)
+
+    if score >= 0.65:
+        level = "safe"
+    elif score >= 0.40:
+        level = "caution"
+    elif score >= 0.18:
+        level = "warning"
+    else:
+        level = "unsafe"
+
+    factors: dict[str, str] = {}
+    if arag_risk > 0.80:
+        factors["aragonite"] = f"critical — Ω {max_aragonite:.1f} vs limit {_ARAGONITE_LIMIT}"
+    elif arag_risk > 0.60:
+        factors["aragonite"] = f"elevated — Ω {max_aragonite:.1f} ({arag_risk:.0%} of limit)"
+    if alk_risk > 0.80:
+        factors["alkalinity"] = f"critical — {max_alkalinity:.0f} vs {_ALKALINITY_LIMIT:.0f} µmol/kg"
+    elif alk_risk > 0.60:
+        factors["alkalinity"] = f"elevated — {max_alkalinity:.0f} µmol/kg ({alk_risk:.0%} of limit)"
+    if temperature > 25.0:
+        factors["temperature"] = f"{temperature}°C reduces CO₂ uptake and amplifies carbonate response"
+    if feedstock == "sodium_hydroxide":
+        factors["feedstock"] = "NaOH — fast-acting, narrow safety window"
+    if discharge_rate > 3.0:
+        factors["discharge"] = f"{discharge_rate} m³/s — high concentration, reduce for safety margin"
+
+    return {
+        "viability_score": score,
+        "level": level,
+        "arag_risk": round(arag_risk, 3),
+        "alk_risk": round(alk_risk, 3),
+        "factors": factors,
+    }
+
+
 # ── Public agent interface ────────────────────────────────────────────────────
 
 class GeochemistAgent:
@@ -160,3 +229,77 @@ class GeochemistAgent:
         result = _rule_based_synthesis(arag_r, alk_r, co2_r, feedstock)
         result["model_used"] = "rule-based-fallback"
         return result
+
+    async def assess_viability(
+        self,
+        max_aragonite: float,
+        max_alkalinity: float,
+        temperature: float,
+        feedstock: str,
+        discharge_rate: float = 0.5,
+        vessel_speed: float = 5.0,
+    ) -> dict:
+        """
+        Combined deployment viability assessment consulted at simulation time.
+
+        Deterministic scoring always runs first (hard numbers regardless of LLM
+        state), then Gemma4 synthesises a one-sentence human summary that weighs
+        all factors together — not just individual threshold checks.
+        """
+        det = _compute_viability(
+            max_aragonite, max_alkalinity, temperature, feedstock, discharge_rate
+        )
+
+        summary: str | None = None
+        model_used = "rule-based-fallback"
+
+        try:
+            system = (
+                "You are a marine geochemistry expert. In ONE concise sentence (≤ 25 words), "
+                "state whether this OAE deployment is viable and identify the primary concern. "
+                "Be specific about numbers. Reply with ONLY the sentence — no JSON, no prefix."
+            )
+            prompt = (
+                f"OAE deployment — feedstock: {feedstock}, discharge: {discharge_rate} m³/s, "
+                f"vessel speed: {vessel_speed} m/s, ocean temp: {temperature}°C\n"
+                f"Ω_aragonite: {max_aragonite:.2f} (limit 30.0, {det['arag_risk']:.0%} of limit)\n"
+                f"Total alkalinity: {max_alkalinity:.0f} µmol/kg (limit 3500, {det['alk_risk']:.0%} of limit)\n"
+                f"Combined viability score: {det['viability_score']:.2f} — level: {det['level']}\n"
+                f"Risk factors: {det['factors']}\n"
+                "Write one sentence summarising whether this deployment is viable."
+            )
+            text = await query_gemma(prompt, system=system, timeout=15.0)
+            if text:
+                text = text.strip().strip('"').strip("'")
+                if text and not text.startswith("{") and len(text) > 15:
+                    summary = text[:220]
+                    model_used = "gemma4:e4b (local)"
+        except Exception:
+            pass
+
+        if not summary:
+            lv = det["level"]
+            if lv == "safe":
+                summary = (
+                    f"Deployment viable — Ω {max_aragonite:.1f} and TA {max_alkalinity:.0f} µmol/kg "
+                    f"remain within safe thresholds."
+                )
+            elif lv == "caution":
+                primary = next(iter(det["factors"]), "chemistry")
+                summary = f"Viable with caution — {primary} approaching threshold; monitor closely."
+            elif lv == "warning":
+                primary = "aragonite" if det["arag_risk"] >= det["alk_risk"] else "alkalinity"
+                summary = f"Marginal deployment — {primary} near critical limit; reduce discharge rate."
+            else:
+                summary = (
+                    f"Not viable — Ω {max_aragonite:.1f} and/or TA {max_alkalinity:.0f} µmol/kg "
+                    f"exceed safe limits; halt deployment."
+                )
+
+        return {
+            "viability_score": det["viability_score"],
+            "level": det["level"],
+            "summary": summary,
+            "factors": det["factors"],
+            "model_used": model_used,
+        }
