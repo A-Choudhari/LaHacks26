@@ -3,7 +3,16 @@ export type AppMode = 'global' | 'mission' | 'route'
 export interface SimulationParams {
   vessel: { vessel_speed: number; discharge_rate: number }
   feedstock: { feedstock_type: 'olivine' | 'sodium_hydroxide' }
-  ocean: { temperature: number; salinity: number }
+  ocean: { temperature: number; salinity: number; mixed_layer_depth?: number }
+}
+
+export interface OptimizeResult {
+  suggested_vessel_speed: number
+  suggested_discharge_rate: number
+  suggested_feedstock: string
+  reasoning: string
+  projected_improvement_pct: number
+  model_used: string
 }
 
 export interface OceanConditions {

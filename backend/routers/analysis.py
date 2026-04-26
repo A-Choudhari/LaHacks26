@@ -201,3 +201,137 @@ async def run_agent(request: AgentRequest):
         )
 
     raise HTTPException(status_code=400, detail=f"Unknown agent_type: {request.agent_type}")
+
+
+# ── Parameter Optimization ────────────────────────────────────────────────────
+
+class OptimizeRequest(BaseModel):
+    simulation_result: dict
+    current_params: dict
+    objective: str = Field("maximize_co2", pattern="^(maximize_co2|minimize_risk|balance)$")
+
+
+class OptimizeResponse(BaseModel):
+    suggested_vessel_speed: float
+    suggested_discharge_rate: float
+    suggested_feedstock: str
+    reasoning: str
+    projected_improvement_pct: float
+    model_used: str
+
+
+def _deterministic_optimize(summary: dict, params: dict, objective: str) -> dict:
+    """Rule-based parameter optimizer — always runs before LLM synthesis."""
+    max_arag = summary.get("max_aragonite_saturation", 0.0)
+    max_alk = summary.get("max_total_alkalinity", 2300.0)
+
+    arag_headroom = 30.0 - max_arag       # positive = safe margin
+    alk_headroom = 3500.0 - max_alk
+    # Safety factor: 0 = at limit, 1 = very safe
+    safety_factor = min(max(arag_headroom / 30.0, 0), max(alk_headroom / 3500.0, 0))
+
+    current_speed = params.get("vessel_speed", 5.0)
+    current_discharge = params.get("discharge_rate", 0.5)
+    current_feedstock = params.get("feedstock_type", "olivine")
+    temp = params.get("temperature", 15.0)
+
+    suggested_speed = current_speed
+    suggested_discharge = current_discharge
+    suggested_feedstock = current_feedstock
+    improvement_pct = 0.0
+
+    if objective == "maximize_co2":
+        if safety_factor > 0.30:
+            # Safe headroom — increase discharge to push more TA into ocean
+            scale = min(1.5, 1.0 + safety_factor * 0.9)
+            suggested_discharge = round(min(1.0, current_discharge * scale), 2)
+            # Slow the vessel slightly to allow more mixing time
+            suggested_speed = round(max(2.0, current_speed * 0.88), 1)
+            improvement_pct = round((suggested_discharge / current_discharge - 1.0) * 85, 1)
+        elif safety_factor < 0.05:
+            # Very close to threshold — back off
+            suggested_discharge = round(current_discharge * 0.65, 2)
+            improvement_pct = -25.0
+        # High-temperature preference: olivine dissolves better above 18°C
+        if temp > 18.0:
+            suggested_feedstock = "olivine"
+
+    elif objective == "minimize_risk":
+        if max_arag > 22.0:
+            suggested_discharge = round(current_discharge * (22.0 / max_arag) * 0.85, 2)
+        if max_arag > 26.0:
+            # Speed up to dilute the plume
+            suggested_speed = round(min(15.0, current_speed * 1.25), 1)
+        improvement_pct = round(min(40.0, (1.0 - safety_factor) * 50.0), 1)
+
+    elif objective == "balance":
+        # Target ~60% safety headroom
+        target_arag = 30.0 * 0.40  # 40% of limit = comfortable
+        if max_arag > 0:
+            scale = target_arag / max_arag
+            suggested_discharge = round(min(1.0, max(0.01, current_discharge * scale)), 2)
+        improvement_pct = round(abs(suggested_discharge - current_discharge) / current_discharge * 55, 1)
+
+    reasoning = (
+        f"Current conditions: Ω_aragonite={max_arag:.2f} (headroom {arag_headroom:.1f}), "
+        f"TA={max_alk:.0f} µmol/kg (headroom {alk_headroom:.0f}). "
+    )
+    if objective == "maximize_co2":
+        reasoning += f"Safety factor {safety_factor:.0%} — {'increasing discharge for higher CO₂ uptake' if improvement_pct > 0 else 'reducing discharge to restore safe margin'}."
+    elif objective == "minimize_risk":
+        reasoning += "Reducing discharge and increasing speed to dilute plume concentration below critical thresholds."
+    else:
+        reasoning += "Balancing deployment for ~60% headroom below aragonite saturation limit."
+
+    return {
+        "suggested_vessel_speed": suggested_speed,
+        "suggested_discharge_rate": suggested_discharge,
+        "suggested_feedstock": suggested_feedstock,
+        "reasoning": reasoning,
+        "projected_improvement_pct": improvement_pct,
+    }
+
+
+@router.post("/optimize", response_model=OptimizeResponse)
+async def optimize_params(request: OptimizeRequest):
+    """
+    Suggest optimal deployment parameters given current simulation results.
+
+    Deterministic optimizer always runs first (safety + efficiency rules),
+    then Gemma4 can refine the reasoning with marine chemistry context.
+    """
+    summary = request.simulation_result.get("summary", {})
+    params = request.current_params
+    objective = request.objective
+
+    core = _deterministic_optimize(summary, params, objective)
+
+    # Try Gemma4 for enriched reasoning
+    try:
+        from agents.base import query_gemma, extract_json, is_ollama_available
+        if is_ollama_available():
+            system = (
+                "You are a marine chemistry expert advising on Ocean Alkalinity Enhancement deployments. "
+                "Given deterministic optimization results and simulation data, refine the reasoning. "
+                "Respond ONLY with valid JSON: reasoning (string, 1-2 sentences), projected_improvement_pct (number)."
+            )
+            prompt = (
+                f"OAE optimization for objective '{objective}':\n"
+                f"Simulation: {summary}\n"
+                f"Current params: {params}\n"
+                f"Deterministic suggestion: speed={core['suggested_vessel_speed']} m/s, "
+                f"discharge={core['suggested_discharge_rate']} m³/s, feedstock={core['suggested_feedstock']}\n"
+                f"Initial reasoning: {core['reasoning']}\n"
+                "Provide refined reasoning and projected improvement percentage."
+            )
+            text = await query_gemma(prompt, system=system)
+            parsed = extract_json(text)
+            if parsed and "reasoning" in parsed:
+                core["reasoning"] = parsed["reasoning"]
+                if "projected_improvement_pct" in parsed:
+                    core["projected_improvement_pct"] = float(parsed["projected_improvement_pct"])
+                return OptimizeResponse(**core, model_used="gemma4:e4b (local)")
+    except Exception:
+        pass
+
+    return OptimizeResponse(**core, model_used="rule-based")

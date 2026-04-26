@@ -72,7 +72,7 @@ export function NatsProvider({ children }: NatsProviderProps) {
     }
 
     // Attempt connection on mount
-    natsManager.connect().then((connected) => {
+    natsManager.connect().then((connected: boolean) => {
       setIsConnected(connected)
       if (connected) {
         setDisconnectedAt(null)
@@ -82,7 +82,7 @@ export function NatsProvider({ children }: NatsProviderProps) {
     })
 
     // Listen for connection state changes
-    const unsub = natsManager.onConnectionChange((connected) => {
+    const unsub = natsManager.onConnectionChange((connected: boolean) => {
       const wasConnected = isConnected
       setIsConnected(connected)
 

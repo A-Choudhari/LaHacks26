@@ -1,4 +1,4 @@
-import { useState, Component, useEffect, useRef } from 'react'
+import { useState, Component, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -140,7 +140,7 @@ function AppContent() {
   })
 
   // NATS health subscription - updates React Query cache directly
-  const { data: natsHealth, timestamp: natsHealthTs } = useNatsSubscription<NatsHealthData>({
+  useNatsSubscription<NatsHealthData>({
     subject: 'health.backend',
     enabled: natsEnabled,
     onMessage: (healthData) => {
