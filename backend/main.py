@@ -55,7 +55,48 @@ async def lifespan(app: FastAPI):
     # Start real-time AIS stream in background
     asyncio.create_task(ais_stream.stream_forever())
 
+    # Start NATS connection and publishers
+    health_pub = None
+    fleet_pub = None
+    try:
+        from nats_client import get_nats, is_nats_available
+        from publishers import HealthPublisher, FleetPublisher
+
+        if await is_nats_available():
+            logger.info("NATS connected - starting publishers")
+
+            # Setup JetStream streams for message persistence
+            try:
+                from nats_config import setup_jetstream_streams, setup_jetstream_consumers
+                await setup_jetstream_streams()
+                await setup_jetstream_consumers()
+            except Exception as e:
+                logger.warning(f"JetStream setup failed (non-fatal): {e}")
+
+            health_pub = HealthPublisher()
+            await health_pub.start()
+            fleet_pub = FleetPublisher()
+            await fleet_pub.start()
+        else:
+            logger.info("NATS unavailable - streaming disabled, HTTP fallback active")
+    except ImportError as e:
+        logger.warning(f"NATS modules not available: {e}")
+    except Exception as e:
+        logger.warning(f"NATS startup failed (non-fatal): {e}")
+
     yield
+
+    # Cleanup NATS on shutdown
+    try:
+        if health_pub:
+            await health_pub.stop()
+        if fleet_pub:
+            await fleet_pub.stop()
+        nats = get_nats()
+        if nats.is_connected:
+            await nats.disconnect()
+    except Exception as e:
+        logger.warning(f"NATS shutdown error: {e}")
 
 
 app = FastAPI(
