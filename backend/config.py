@@ -6,8 +6,9 @@ import os
 import subprocess
 from pathlib import Path
 
-# NATS configuration
+# NATS configuration — disabled unless explicitly opted in
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
+NATS_ENABLED = os.environ.get("NATS_ENABLED", "false").lower() == "true"
 
 # Paths
 PROJECT_ROOT = Path(__file__).parent.parent

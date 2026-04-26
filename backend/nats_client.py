@@ -76,8 +76,8 @@ class NATSClient:
         try:
             self._nc = await _nats_module.connect(
                 servers=[NATS_URL],
-                reconnect_time_wait=2,
-                max_reconnect_attempts=-1,  # Infinite reconnects
+                reconnect_time_wait=5,
+                max_reconnect_attempts=10,
                 error_cb=self._on_error,
                 disconnected_cb=self._on_disconnect,
                 reconnected_cb=self._on_reconnect,
@@ -193,7 +193,7 @@ class NATSClient:
 
     # Connection event handlers
     async def _on_error(self, e):
-        logger.error(f"NATS error: {e}")
+        logger.debug(f"NATS error: {e}")
 
     async def _on_disconnect(self):
         logger.warning("NATS disconnected")
