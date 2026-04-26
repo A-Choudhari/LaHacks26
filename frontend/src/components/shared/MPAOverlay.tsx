@@ -1,9 +1,14 @@
 import { Source, Layer } from 'react-map-gl'
 import { MPA_DATA } from '../../constants'
 
-export function MPAOverlay() {
+interface MPAOverlayProps {
+  data?: { type: string; features: unknown[] } | null
+}
+
+export function MPAOverlay({ data }: MPAOverlayProps) {
+  const src = (data && data.features?.length > 0 ? data : MPA_DATA) as Parameters<typeof Source>[0]['data']
   return (
-    <Source id="mpa" type="geojson" data={MPA_DATA}>
+    <Source id="mpa" type="geojson" data={src}>
       <Layer
         id="mpa-glow"
         type="line"

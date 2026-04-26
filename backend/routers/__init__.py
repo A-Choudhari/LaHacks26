@@ -10,6 +10,8 @@ from .discovery import router as discovery_router
 from .analysis import router as analysis_router
 from .simulation import router as simulation_router
 from .hotspot import router as hotspot_router
+from .mpas import router as mpas_router
+from .route_plan import router as route_plan_router
 
 __all__ = [
     "health_router",
@@ -20,4 +22,6 @@ __all__ = [
     "analysis_router",
     "simulation_router",
     "hotspot_router",
+    "mpas_router",
+    "route_plan_router",
 ]

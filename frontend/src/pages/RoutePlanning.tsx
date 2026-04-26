@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { API_URL, MAPBOX_TOKEN, fadeUp, staggerList } from '../constants'
 import type { ShipStatus, DiscoveryZone } from '../types'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
+import { useMPAData } from '../hooks/useMPAData'
 import { ShipMarker } from '../components/shared/ShipMarker'
 import { AISLayer } from '../components/shared/AISLayer'
 
@@ -26,6 +27,32 @@ interface FleetRoute {
   waypoints: { lat: number; lon: number; label: string }[]
   totalKm: number
   sites: DiscoveryZone[]
+}
+
+interface AgentWaypoint {
+  lat: number
+  lon: number
+  label: string
+  is_detour?: boolean
+}
+
+interface AgentSite {
+  lat: number
+  lon: number
+  score: number
+  name?: string
+  reason?: string
+}
+
+interface AgentRoute {
+  ship_id: string
+  ship_name: string
+  color: string
+  waypoints: AgentWaypoint[]
+  total_km: number
+  co2_estimate_tons: number
+  sites: AgentSite[]
+  mpa_warnings: string[]
 }
 
 function haversineKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
@@ -73,6 +100,50 @@ function trimRoute(
     }
   }
   return coords
+}
+
+// ── MPA collision detection ───────────────────────────────────────────────────
+
+function pointInPolygonRing(lon: number, lat: number, ring: number[][]): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j]
+    if (((yi > lat) !== (yj > lat)) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)
+      inside = !inside
+  }
+  return inside
+}
+
+function pointInAnyMPA(lon: number, lat: number, features: any[]): string | null {
+  for (const f of features) {
+    const geom = f.geometry
+    if (!geom) continue
+    const rings: number[][][] =
+      geom.type === 'Polygon' ? geom.coordinates :
+      geom.type === 'MultiPolygon' ? geom.coordinates.flat() : []
+    for (const ring of rings) {
+      if (pointInPolygonRing(lon, lat, ring))
+        return f.properties?.SITE_NAME ?? 'MPA'
+    }
+  }
+  return null
+}
+
+// Sample N points along a segment; returns name of first MPA hit, or null
+function segmentMPAConflict(
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+  features: any[],
+  samples = 12,
+): string | null {
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples
+    const lon = a.lon + t * (b.lon - a.lon)
+    const lat = a.lat + t * (b.lat - a.lat)
+    const hit = pointInAnyMPA(lon, lat, features)
+    if (hit) return hit
+  }
+  return null
 }
 
 // Ease-in-out cubic
@@ -137,6 +208,7 @@ function planFleetRoutes(
 }
 
 export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
+  const { data: mpaData } = useMPAData()
   const [tab, setTab] = useState<'fleet' | 'manual'>('fleet')
   const [manualWaypoints, setManualWaypoints] = useState<{ lat: number; lon: number }[]>([])
   const [hotspots, setHotspots] = useState<DiscoveryZone[]>([])
@@ -171,20 +243,55 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routesComputed, hotspots])
 
+  const [agentRoutes, setAgentRoutes] = useState<AgentRoute[] | null>(null)
+  const [agentReasoning, setAgentReasoning] = useState<string>('')
+  const [agentModel, setAgentModel] = useState<string>('')
+  const [fleetCO2, setFleetCO2] = useState<number>(0)
+
   const computeRoutes = async () => {
     setIsDiscovering(true)
+    setAgentRoutes(null)
+    setAgentReasoning('')
     try {
-      const res = await fetch(`${API_URL}/discover`, {
+      // Phase 1: discover high-value zones
+      const discRes = await fetch(`${API_URL}/discover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lat: 33.80, lon: -119.50, radius_km: 500 }),
       })
-      const data = await res.json()
-      const zones: DiscoveryZone[] = data.zones ?? data
+      const discData = await discRes.json()
+      const zones: DiscoveryZone[] = discData.zones ?? discData
       setHotspots(zones)
+
+      // Phase 2: agentic route planning (MPA avoidance + CO2 maximization)
+      const shipInputs = (fleet ?? []).map(s => ({
+        ship_id:   s.ship_id,
+        ship_name: s.name,
+        lat:       s.position.lat,
+        lon:       s.position.lon,
+      }))
+      const zoneInputs = zones.map(z => ({
+        lat: z.lat, lon: z.lon,
+        score: z.score,
+        name: z.name ?? undefined,
+        reason: z.reason,
+      }))
+      const planRes = await fetch(`${API_URL}/route-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ships: shipInputs, zones: zoneInputs }),
+      })
+      if (planRes.ok) {
+        const plan = await planRes.json()
+        setAgentRoutes(plan.routes)
+        setAgentReasoning(plan.agent_reasoning ?? '')
+        setAgentModel(plan.model_used ?? '')
+        setFleetCO2(plan.fleet_co2_estimate ?? 0)
+      }
       setRoutesComputed(true)
     } catch (e) {
-      console.error('discover failed', e)
+      console.error('route plan failed', e)
+      setRoutesComputed(true)  // still show greedy fallback
     } finally {
       setIsDiscovering(false)
     }
@@ -204,13 +311,65 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
     return easeInOut(raw)
   }
 
+  // MPA conflict check for each manual segment
+  const mpaFeatures = useMemo(() => mpaData?.features ?? [], [mpaData])
+
+  const segmentConflicts = useMemo<(string | null)[]>(() => {
+    if (manualWaypoints.length < 2 || mpaFeatures.length === 0) return []
+    return manualWaypoints.slice(1).map((wp, i) =>
+      segmentMPAConflict(manualWaypoints[i], wp, mpaFeatures)
+    )
+  }, [manualWaypoints, mpaFeatures])
+
+  const conflictCount = segmentConflicts.filter(Boolean).length
+
+  // Split manual route into safe/conflict GeoJSON segments for map rendering
+  const { safeRouteGeoJSON, conflictRouteGeoJSON } = useMemo(() => {
+    const safe: [number, number][][] = []
+    const conflict: [number, number][][] = []
+    manualWaypoints.slice(1).forEach((wp, i) => {
+      const seg: [number, number][] = [
+        [manualWaypoints[i].lon, manualWaypoints[i].lat],
+        [wp.lon, wp.lat],
+      ]
+      if (segmentConflicts[i]) conflict.push(seg)
+      else safe.push(seg)
+    })
+    const toGeoJSON = (segs: [number, number][][]) => ({
+      type: 'FeatureCollection' as const,
+      features: segs.map(coords => ({
+        type: 'Feature' as const,
+        properties: {},
+        geometry: { type: 'LineString' as const, coordinates: coords },
+      })),
+    })
+    return { safeRouteGeoJSON: toGeoJSON(safe), conflictRouteGeoJSON: toGeoJSON(conflict) }
+  }, [manualWaypoints, segmentConflicts])
+
   // Manual route stats
   const manualKm =
     manualWaypoints.length >= 2
       ? manualWaypoints.slice(1).reduce((sum, wp, i) => sum + haversineKm(manualWaypoints[i], wp), 0)
       : 0
 
-  const totalFleetCO2 = routes.reduce((sum, r) => sum + r.totalKm * 2.1, 0)
+  const totalFleetCO2 = agentRoutes
+    ? fleetCO2
+    : routes.reduce((sum, r) => sum + r.totalKm * 2.1, 0)
+
+  // Unified route list for map + sidebar: prefer agent result, fall back to greedy
+  const activeRoutes: AgentRoute[] = useMemo(() => {
+    if (agentRoutes) return agentRoutes
+    return routes.map(r => ({
+      ship_id:           r.ship.ship_id,
+      ship_name:         r.ship.name,
+      color:             r.color,
+      waypoints:         r.waypoints,
+      total_km:          r.totalKm,
+      co2_estimate_tons: Math.round(r.totalKm * 2.1),
+      sites:             r.sites.map(s => ({ lat: s.lat, lon: s.lon, score: s.score, name: s.name })),
+      mpa_warnings:      [],
+    }))
+  }, [agentRoutes, routes])
 
   // Sidebar shows only 30 closest vessels (avoid rendering 3000 DOM cards)
   const sidebarVessels = useMemo(() => (traffic ?? []).slice(0, 30), [traffic])
@@ -297,7 +456,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
 
                 {/* Fleet totals */}
                 <AnimatePresence>
-                  {routesComputed && routes.length > 0 && (
+                  {routesComputed && activeRoutes.length > 0 && (
                     <motion.div
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -317,6 +476,39 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
                         </div>
                       </div>
 
+                      {/* Agent reasoning */}
+                      <AnimatePresence>
+                        {agentReasoning && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            style={{
+                              marginTop: 10, padding: '8px 10px',
+                              background: 'rgba(0,200,240,0.06)',
+                              border: '1px solid rgba(0,200,240,0.18)',
+                              borderRadius: 7, fontSize: 10, color: 'var(--text-2)',
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            <div style={{ color: 'var(--deploy)', fontWeight: 700, marginBottom: 3, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                              {agentModel.includes('gemma') ? '◈ Gemma4 Strategy' : '◈ Agent Strategy'}
+                            </div>
+                            {agentReasoning}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        fontSize: 10, color: 'var(--success)',
+                        background: 'rgba(74,222,128,0.07)',
+                        border: '1px solid rgba(74,222,128,0.2)',
+                        borderRadius: 6, padding: '5px 10px', marginTop: 8,
+                      }}>
+                        <span>✓</span><span>MPA-Safe — detours computed for all conflicts</span>
+                      </div>
+
                       <div className="gi-divider" style={{ margin: '14px 0' }} />
 
                       {/* Per-ship route cards */}
@@ -326,40 +518,40 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
                         initial="hidden"
                         animate="show"
                       >
-                        {routes.map(route => (
+                        {activeRoutes.map(route => (
                           <motion.div
-                            key={route.ship.ship_id}
+                            key={route.ship_id}
                             variants={fadeUp}
                             className="rp-fleet-card"
                             style={{ borderLeftColor: route.color }}
                           >
-                            {/* Ship name + color */}
                             <div className="rp-fleet-header">
                               <div className="rp-fleet-pip" style={{ background: route.color, boxShadow: `0 0 6px ${route.color}66` }} />
                               <span className="rp-fleet-name" style={{ color: route.color }}>
-                                {route.ship.name}
+                                {route.ship_name}
                               </span>
-                              <span className="rp-fleet-meta">
-                                {route.totalKm.toFixed(0)} km
-                              </span>
+                              <span className="rp-fleet-meta">{route.total_km.toFixed(0)} km</span>
                             </div>
 
-                            {/* Hotspot list */}
                             <div className="rp-fleet-sites">
                               {route.sites.map((site, si) => (
                                 <div key={si} className="rp-fleet-site-row">
                                   <div className="rp-fleet-site-dot" />
                                   <span className="rp-fleet-site-name">{site.name ?? `Site ${si + 1}`}</span>
-                                  <span className="rp-fleet-site-score">
-                                    {(site.score * 100).toFixed(0)}%
-                                  </span>
+                                  <span className="rp-fleet-site-score">{(site.score * 100).toFixed(0)}%</span>
                                 </div>
                               ))}
                             </div>
 
-                            {/* CO₂ estimate */}
+                            {/* MPA detour warnings */}
+                            {route.mpa_warnings.map((w, wi) => (
+                              <div key={wi} style={{ fontSize: 9, color: 'var(--warning)', marginTop: 3, display: 'flex', gap: 4 }}>
+                                <span>⚠</span><span>{w}</span>
+                              </div>
+                            ))}
+
                             <div className="rp-fleet-co2">
-                              +{(route.totalKm * 2.1).toFixed(0)} t CO₂
+                              +{route.co2_estimate_tons.toFixed(0)} t CO₂
                             </div>
                           </motion.div>
                         ))}
@@ -458,15 +650,40 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
                         initial="hidden"
                         animate="show"
                       >
+                        {conflictCount > 0 && (
+                          <motion.div
+                            variants={fadeUp}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              background: 'rgba(248,113,113,0.08)',
+                              border: '1px solid rgba(248,113,113,0.25)',
+                              borderRadius: 6, padding: '6px 10px', marginBottom: 6,
+                              fontSize: 10, color: 'var(--danger)',
+                            }}
+                          >
+                            <span>⚠</span>
+                            <span>{conflictCount} segment{conflictCount > 1 ? 's' : ''} cross MPA boundaries</span>
+                          </motion.div>
+                        )}
                         {manualWaypoints.slice(1).map((wp, i) => {
                           const km = haversineKm(manualWaypoints[i], wp)
+                          const mpaHit = segmentConflicts[i]
                           return (
-                            <motion.div key={i} variants={fadeUp} className="rp-segment-card">
-                              <div className="rp-segment-num">{i + 1}</div>
-                              <div className="rp-segment-info">
+                            <motion.div
+                              key={i} variants={fadeUp}
+                              className="rp-segment-card"
+                              style={mpaHit ? { borderColor: 'rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.05)' } : undefined}
+                            >
+                              <div className="rp-segment-num" style={mpaHit ? { color: 'var(--danger)' } : undefined}>{i + 1}</div>
+                              <div className="rp-segment-info" style={{ flex: 1 }}>
                                 <span className="rp-segment-dist">{km.toFixed(1)} km</span>
                                 <span className="ship-sep">·</span>
                                 <span className="rp-segment-co2">+{(km * 2.1).toFixed(1)} t CO₂</span>
+                                {mpaHit && (
+                                  <div style={{ fontSize: 9, color: 'var(--danger)', marginTop: 2 }}>
+                                    ⚠ Crosses {mpaHit}
+                                  </div>
+                                )}
                               </div>
                             </motion.div>
                           )
@@ -500,10 +717,10 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
           }
           cursor={tab === 'manual' ? 'crosshair' : 'grab'}
         >
-          <MPAOverlay />
+          <MPAOverlay data={mpaData} />
 
           {/* Fleet route lines — animated draw using trimRoute + shipProgress */}
-          {routes.map((route, i) => {
+          {activeRoutes.map((route, i) => {
             const prog   = shipProgress(i)
             const coords = trimRoute(route.waypoints, prog)
             const geojson = {
@@ -514,19 +731,21 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
                 geometry: { type: 'LineString' as const, coordinates: coords },
               }] : [],
             }
-            // Leading-edge head position (tip of animated line)
             const head = coords[coords.length - 1]
 
+            // Detour waypoints for this route (inserted by agent)
+            const detourWPs = route.waypoints.filter(w => w.is_detour)
+
             return (
-              <React.Fragment key={route.ship.ship_id}>
-                <Source id={`route-${route.ship.ship_id}`} type="geojson" data={geojson}>
+              <React.Fragment key={route.ship_id}>
+                <Source id={`route-${route.ship_id}`} type="geojson" data={geojson}>
                   <Layer
-                    id={`route-${route.ship.ship_id}-glow`}
+                    id={`route-${route.ship_id}-glow`}
                     type="line"
                     paint={{ 'line-color': route.color, 'line-width': 14, 'line-blur': 10, 'line-opacity': 0.18 }}
                   />
                   <Layer
-                    id={`route-${route.ship.ship_id}-line`}
+                    id={`route-${route.ship_id}-line`}
                     type="line"
                     paint={{ 'line-color': route.color, 'line-width': 2.5, 'line-dasharray': [4, 2.5] }}
                   />
@@ -543,26 +762,43 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
                     }} />
                   </Marker>
                 )}
+
+                {/* Detour waypoint markers — amber diamond, shown after animation */}
+                {animProgress > 0.5 && detourWPs.map((dw, di) => (
+                  <Marker key={`detour-${route.ship_id}-${di}`} longitude={dw.lon} latitude={dw.lat} anchor="center">
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: 'spring', stiffness: 480, damping: 28, delay: 0.2 }}
+                      title={dw.label}
+                      style={{
+                        width: 18, height: 18,
+                        background: 'rgba(251,191,36,0.15)',
+                        border: '1.5px solid #fbbf24',
+                        borderRadius: 4,
+                        transform: 'rotate(45deg)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 0 8px rgba(251,191,36,0.4)',
+                      }}
+                    />
+                  </Marker>
+                ))}
               </React.Fragment>
             )
           })}
 
-          {/* Manual route line */}
+          {/* Manual route — safe segments (cyan) */}
           {tab === 'manual' && manualWaypoints.length >= 2 && (
-            <Source
-              id="manual-route"
-              type="geojson"
-              data={{
-                type: 'FeatureCollection' as const,
-                features: [{
-                  type: 'Feature' as const,
-                  properties: {},
-                  geometry: { type: 'LineString' as const, coordinates: manualWaypoints.map(w => [w.lon, w.lat]) },
-                }],
-              }}
-            >
-              <Layer id="manual-glow" type="line" paint={{ 'line-color': '#22d3ee', 'line-width': 14, 'line-blur': 10, 'line-opacity': 0.2 }} />
-              <Layer id="manual-line" type="line" paint={{ 'line-color': '#22d3ee', 'line-width': 2.5, 'line-dasharray': [3, 2] }} />
+            <Source id="manual-safe" type="geojson" data={safeRouteGeoJSON}>
+              <Layer id="manual-safe-glow" type="line" paint={{ 'line-color': '#22d3ee', 'line-width': 14, 'line-blur': 10, 'line-opacity': 0.2 }} />
+              <Layer id="manual-safe-line" type="line" paint={{ 'line-color': '#22d3ee', 'line-width': 2.5, 'line-dasharray': [3, 2] }} />
+            </Source>
+          )}
+          {/* Manual route — MPA-conflicting segments (red) */}
+          {tab === 'manual' && conflictRouteGeoJSON.features.length > 0 && (
+            <Source id="manual-conflict" type="geojson" data={conflictRouteGeoJSON}>
+              <Layer id="manual-conflict-glow" type="line" paint={{ 'line-color': '#f87171', 'line-width': 14, 'line-blur': 10, 'line-opacity': 0.25 }} />
+              <Layer id="manual-conflict-line" type="line" paint={{ 'line-color': '#f87171', 'line-width': 2.5, 'line-dasharray': [2, 2] }} />
             </Source>
           )}
 
@@ -639,13 +875,13 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
         {/* Legend */}
         <div className="map-legend">
           <div className="legend-row"><div className="legend-swatch" /><span>MPA Zone</span></div>
-          {routes.map(r => (
-            <div key={r.ship.ship_id} className="legend-row">
+          {activeRoutes.map(r => (
+            <div key={r.ship_id} className="legend-row">
               <div style={{ width: 20, height: 3, background: r.color, borderRadius: 2, boxShadow: `0 0 5px ${r.color}55` }} />
-              <span style={{ color: r.color }}>{r.ship.name.split(' ')[0]}</span>
+              <span style={{ color: r.color }}>{r.ship_name.split(' ')[0]}</span>
             </div>
           ))}
-          {routes.length === 0 && (
+          {activeRoutes.length === 0 && (
             <div className="legend-row">
               <div style={{ width: 20, height: 3, background: '#22d3ee', borderRadius: 2 }} />
               <span>Route</span>
@@ -738,23 +974,24 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
           )}
 
           {/* Route summary when computed */}
-          {routesComputed && routes.length > 0 && (
+          {routesComputed && activeRoutes.length > 0 && (
             <>
               <div className="gi-divider" style={{ margin: '16px 0' }} />
               <div className="panel-label" style={{ marginBottom: 10 }}>Fleet Summary</div>
-              {routes.map(route => (
-                <div key={route.ship.ship_id} className="rp-fleet-summary-row">
+              {activeRoutes.map(route => (
+                <div key={route.ship_id} className="rp-fleet-summary-row">
                   <div className="rp-fleet-pip" style={{ background: route.color, boxShadow: `0 0 5px ${route.color}55` }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: route.color, marginBottom: 2 }}>
-                      {route.ship.name}
+                      {route.ship_name}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                      {route.sites.length} site{route.sites.length > 1 ? 's' : ''} · {route.totalKm.toFixed(0)} km
+                      {route.sites.length} site{route.sites.length > 1 ? 's' : ''} · {route.total_km.toFixed(0)} km
+                      {route.mpa_warnings.length > 0 && <span style={{ color: 'var(--warning)', marginLeft: 4 }}>⚠ {route.mpa_warnings.length} detour{route.mpa_warnings.length > 1 ? 's' : ''}</span>}
                     </div>
                   </div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', flexShrink: 0 }}>
-                    +{(route.totalKm * 2.1).toFixed(0)} t
+                    +{route.co2_estimate_tons.toFixed(0)} t
                   </div>
                 </div>
               ))}

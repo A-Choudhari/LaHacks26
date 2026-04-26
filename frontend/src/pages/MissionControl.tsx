@@ -10,6 +10,7 @@ import { LiveImpactPanel } from '../components/mission/LiveImpactPanel'
 import { FleetPanel } from '../components/shared/FleetPanel'
 import { ShipMarker } from '../components/shared/ShipMarker'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
+import { useMPAData } from '../hooks/useMPAData'
 import { AISLayer } from '../components/shared/AISLayer'
 import { PlumeHeatmap } from '../components/shared/PlumeHeatmap'
 import { MapLegend } from '../components/shared/MapLegend'
@@ -45,6 +46,7 @@ function advanceShip(ship: ShipStatus, dtMs: number): ShipStatus {
 }
 
 export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: MissionControlProps) {
+  const { data: mpaData } = useMPAData()
   const [simulationResult, setSimulationResult] = useState<SimulationResult>()
   const [lastParams, setLastParams] = useState<SimulationParams>()
   const [showPlume, setShowPlume] = useState(false)
@@ -215,7 +217,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: M
           reuseMaps
           onLoad={handleMapLoad}
         >
-          <MPAOverlay />
+          <MPAOverlay data={mpaData} />
           <AISLayer vessels={traffic} />
           <PlumeHeatmap
             visible={showPlume}

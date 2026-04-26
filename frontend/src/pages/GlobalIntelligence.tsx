@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { API_URL, MAPBOX_TOKEN, OAE_ZONES, fadeUp, staggerList } from '../constants'
 import type { CalCOFIStation, DiscoveryZone, HotspotImpact, ShipStatus, GlobalHotspot } from '../types'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
+import { useMPAData } from '../hooks/useMPAData'
 import { ShipMarker } from '../components/shared/ShipMarker'
 import { AISLayer } from '../components/shared/AISLayer'
 
@@ -35,6 +36,8 @@ const TIER_COLOR: Record<string, string> = {
 
 export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) {
   const mapRef = useRef<MapRef>(null)
+
+  const { data: mpaData } = useMPAData()
 
   const { data: stations } = useQuery<CalCOFIStation[]>({
     queryKey: ['oceanographic'],
@@ -393,7 +396,7 @@ export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) 
             </Source>
           )}
 
-          <MPAOverlay />
+          <MPAOverlay data={mpaData} />
           <AISLayer vessels={traffic} />
 
           {fleet?.map(ship => (

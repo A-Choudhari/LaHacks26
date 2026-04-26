@@ -29,34 +29,41 @@ class ShipStatus(BaseModel):
 
 
 def _get_static_fleet() -> list[dict]:
-    """Static fleet data when NATS is not active."""
+    """
+    Fleet at active open-ocean deployment positions off the California coast.
+    Ships operate from offshore staging areas — clear of harbors, islands, and
+    the mainland coast — so all routes stay in navigable international waters.
+    """
     return [
         {
             "ship_id": "ship-001",
             "name": "Pacific Guardian",
-            "position": {"lat": 33.7346, "lon": -118.2560},
+            # South of Channel Islands, well offshore — primary OAE deployment zone
+            "position": {"lat": 33.45, "lon": -119.80},
             "status": "deploying",
             "last_simulation": datetime.utcnow().isoformat() + "Z",
             "co2_removed_tons": 847.3,
             "alkalinity_deployed_kg": 12500.0,
-            "heading": 247.0,
+            "heading": 295.0,
             "speed_kn": 6.2,
         },
         {
             "ship_id": "ship-002",
             "name": "Ocean Sentinel",
-            "position": {"lat": 33.7541, "lon": -118.2165},
+            # West of Santa Barbara, approaching from the northwest
+            "position": {"lat": 34.30, "lon": -120.60},
             "status": "active",
             "last_simulation": datetime.utcnow().isoformat() + "Z",
             "co2_removed_tons": 623.1,
             "alkalinity_deployed_kg": 9200.0,
-            "heading": 215.0,
+            "heading": 340.0,
             "speed_kn": 9.4,
         },
         {
             "ship_id": "ship-003",
             "name": "Reef Protector",
-            "position": {"lat": 32.6967, "lon": -117.1319},
+            # Southwest of San Diego, open Pacific
+            "position": {"lat": 32.20, "lon": -118.80},
             "status": "idle",
             "last_simulation": None,
             "co2_removed_tons": 189.6,

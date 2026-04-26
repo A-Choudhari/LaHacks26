@@ -32,6 +32,8 @@ from routers import (
     analysis_router,
     simulation_router,
     hotspot_router,
+    mpas_router,
+    route_plan_router,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,6 +126,8 @@ app.include_router(discovery_router)
 app.include_router(analysis_router)
 app.include_router(simulation_router)
 app.include_router(hotspot_router)
+app.include_router(mpas_router)
+app.include_router(route_plan_router)
 
 
 if __name__ == "__main__":

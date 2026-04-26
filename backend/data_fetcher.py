@@ -604,7 +604,56 @@ def compute_oae_scores(
     return results
 
 
-# ── 7. Refresh all datasets ───────────────────────────────────────────────────
+# ── 7. Marine Protected Areas ─────────────────────────────────────────────────
+
+_NOAA_MPA_URLS = [
+    ("https://services2.arcgis.com/C8EMgrsFocRFL6LrL/arcgis/rest"
+     "/services/NOAA_MPA_Atlas/FeatureServer/0/query"),
+    ("https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest"
+     "/services/NOAA_MPA_Inventory/FeatureServer/0/query"),
+]
+
+def fetch_mpas(force: bool = False) -> dict:
+    """
+    Marine Protected Areas — Pacific US coast, Hawaii, and federal offshore MPAs.
+    Primary: pre-seeded data/real/mpas.json (21 real NMS + MLPA + Hawaii MPAs).
+    Live refresh: NOAA MPA Atlas ArcGIS FeatureServer (attempts on stale cache).
+    Returns GeoJSON FeatureCollection ready for Mapbox rendering.
+    """
+    cache_name = "mpas"
+    if not force and not _is_stale(_cache_path(cache_name), max_age_hours=24 * 7):
+        cached = _load(cache_name)
+        if cached and cached.get("features"):
+            logger.info(f"MPAs: using cache ({len(cached['features'])} features)")
+            return cached
+
+    params = {
+        "where": "State IN ('CA','OR','WA','HI','AK') OR Gov_Level='Federal'",
+        "outFields": "SITE_NAME,State,Gov_Level,Prot_Lvl",
+        "outSR": "4326",
+        "f": "geojson",
+        "resultRecordCount": "2000",
+    }
+    for url in _NOAA_MPA_URLS:
+        try:
+            r = requests.get(url, params=params, timeout=15)
+            if r.status_code == 200:
+                data = r.json()
+                if len(data.get("features", [])) > 5:
+                    _save(cache_name, data)
+                    logger.info(f"MPAs: fetched {len(data['features'])} features live")
+                    return data
+        except Exception as e:
+            logger.debug(f"MPAs: {url} failed: {e}")
+
+    bundled = _load(cache_name)
+    if bundled and bundled.get("features"):
+        logger.info(f"MPAs: using bundled data ({len(bundled['features'])} features)")
+        return bundled
+    return {"type": "FeatureCollection", "features": []}
+
+
+# ── 8. Refresh all datasets ───────────────────────────────────────────────────
 
 def refresh_all(force: bool = False) -> dict:
     """Fetch all real datasets. Called at startup and on demand."""
