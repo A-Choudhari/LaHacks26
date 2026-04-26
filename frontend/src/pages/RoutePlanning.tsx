@@ -264,12 +264,16 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
       setHotspots(zones)
 
       // Phase 2: agentic route planning (MPA avoidance + CO2 maximization)
-      const shipInputs = (fleet ?? []).map(s => ({
-        ship_id:   s.ship_id,
-        ship_name: s.name,
-        lat:       s.position.lat,
-        lon:       s.position.lon,
-      }))
+      // Use localPositions to respect dragged ship positions
+      const shipInputs = (fleet ?? []).map(s => {
+        const pos = localPositions[s.ship_id] ?? s.position
+        return {
+          ship_id:   s.ship_id,
+          ship_name: s.name,
+          lat:       pos.lat,
+          lon:       pos.lon,
+        }
+      })
       const zoneInputs = zones.map(z => ({
         lat: z.lat, lon: z.lon,
         score: z.score,
