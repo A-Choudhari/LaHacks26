@@ -22,3 +22,6 @@ google-adk>=0.1.0
 
 # OpenAI-compatible client for Ollama
 openai>=1.12.0
+
+# Real-time event streaming
+nats-py>=2.7.0

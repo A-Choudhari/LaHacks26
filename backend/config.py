@@ -2,8 +2,12 @@
 Configuration constants for The Tiered Edge Fleet backend.
 """
 
+import os
 import subprocess
 from pathlib import Path
+
+# NATS configuration
+NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 
 # Paths
 PROJECT_ROOT = Path(__file__).parent.parent

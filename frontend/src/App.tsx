@@ -1,6 +1,6 @@
-import { useState, Component } from 'react'
+import { useState, Component, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
@@ -12,6 +12,8 @@ import { MissionControl } from './pages/MissionControl'
 import { RoutePlanning } from './pages/RoutePlanning'
 import { TourOverlay } from './components/tour/TourOverlay'
 import { GLOBAL_TOUR, MISSION_TOUR, ROUTE_TOUR, TOUR_STORAGE_KEYS } from './components/tour/tourSteps'
+import { NatsProvider, useNatsContext } from './context/NatsContext'
+import { useNatsSubscription } from './hooks/useNatsSubscription'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
@@ -38,7 +40,44 @@ interface HealthData {
   julia_available: boolean
   mock_data_available: boolean
   ollama_available: boolean
+  ais_live?: boolean
+  ais_vessels?: number
   latency: number
+}
+
+// NATS message types
+interface NatsHealthData {
+  status: string
+  julia_available: boolean
+  mock_data_available: boolean
+  ollama_available: boolean
+  ais_live: boolean
+  ais_vessels: number
+}
+
+interface NatsAISVessel {
+  vessel_id: string
+  name: string
+  vessel_type: string
+  lat: number
+  lon: number
+  heading: number
+  speed_kn: number
+  mmsi?: string
+  conflict_risk?: boolean
+}
+
+interface NatsAISBatch {
+  count: number
+  vessels: NatsAISVessel[]
+}
+
+interface NatsFleetPosition {
+  ship_id: string
+  lat: number
+  lon: number
+  heading: number
+  speed_kn: number
 }
 
 const TOUR_STEPS = {
@@ -50,11 +89,44 @@ const TOUR_STEPS = {
 function AppContent() {
   const [mode, setMode] = useState<AppMode>('mission')
   const [restartSignal, setRestartSignal] = useState(0)
+  const queryClient = useQueryClient()
+  const {
+    isConnected: natsConnected,
+    isEnabled: natsEnabled,
+    isReconnecting: natsReconnecting,
+    bufferedEventCount,
+  } = useNatsContext()
+
+  // Track last HTTP latency for display
+  const lastLatencyRef = useRef<number>(0)
 
   const { data: fleet, isLoading: fleetLoading } = useQuery<ShipStatus[]>({
     queryKey: ['fleet'],
     queryFn: () => fetch(`${API_URL}/fleet`).then(r => r.json()),
-    refetchInterval: 10000,
+    refetchInterval: natsConnected ? 30000 : 10000, // Reduce polling when NATS active
+  })
+
+  // NATS fleet position subscription - real-time 1Hz updates
+  // Subscribe to all ships via wildcard pattern (handled server-side)
+  useNatsSubscription<NatsFleetPosition>({
+    subject: 'fleet.*.position',
+    enabled: natsEnabled,
+    onMessage: (posData) => {
+      // Update the specific ship in React Query cache
+      queryClient.setQueryData<ShipStatus[]>(['fleet'], (old) => {
+        if (!old) return old
+        return old.map(ship =>
+          ship.ship_id === posData.ship_id
+            ? {
+                ...ship,
+                position: { lat: posData.lat, lon: posData.lon },
+                heading: posData.heading,
+                speed_kn: posData.speed_kn,
+              }
+            : ship
+        )
+      })
+    },
   })
 
   // Single shared AIS traffic fetch — all three pages consume this,
@@ -62,20 +134,47 @@ function AppContent() {
   const { data: traffic } = useQuery<any[]>({
     queryKey: ['traffic'],
     queryFn: () => fetch(`${API_URL}/traffic`).then(r => r.json()),
-    refetchInterval: 30000,
+    refetchInterval: natsConnected ? false : 30000, // Disable polling when NATS active
     staleTime: 20000,
     retry: 1,
   })
 
+  // NATS health subscription - updates React Query cache directly
+  useNatsSubscription<NatsHealthData>({
+    subject: 'health.backend',
+    enabled: natsEnabled,
+    onMessage: (healthData) => {
+      // Update React Query cache with NATS data
+      queryClient.setQueryData<HealthData>(['health'], (old) => ({
+        ...healthData,
+        latency: old?.latency ?? lastLatencyRef.current,
+      }))
+    },
+  })
+
+  // NATS AIS subscription - real-time vessel updates (2s instead of 30s polling)
+  useNatsSubscription<NatsAISBatch>({
+    subject: 'ais.batch',
+    enabled: natsEnabled,
+    onMessage: (aisData) => {
+      // Update React Query traffic cache with NATS data
+      queryClient.setQueryData<NatsAISVessel[]>(['traffic'], aisData.vessels)
+    },
+  })
+
+  // HTTP health polling - reduced interval when NATS is active
   const { data: health } = useQuery<HealthData>({
     queryKey: ['health'],
     queryFn: async () => {
       const t = Date.now()
       const res = await fetch(`${API_URL}/health`)
       const data = await res.json()
-      return { ...data, latency: Date.now() - t }
+      const latency = Date.now() - t
+      lastLatencyRef.current = latency
+      return { ...data, latency }
     },
-    refetchInterval: 5000,
+    // Poll every 5s normally, or every 30s if NATS is providing updates
+    refetchInterval: natsConnected ? 30000 : 5000,
   })
 
   const storageKey = TOUR_STORAGE_KEYS[mode]
@@ -139,6 +238,18 @@ function AppContent() {
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               >
                 <div className="header-chip">{health.latency}ms</div>
+                {natsEnabled && (
+                  <div className={`header-chip ${natsConnected ? 'chip-ok' : 'chip-off'}`}>
+                    {natsReconnecting ? (
+                      <>
+                        <span className="nats-reconnect-spinner" />
+                        {bufferedEventCount > 0 ? `(${bufferedEventCount})` : 'Reconnecting...'}
+                      </>
+                    ) : (
+                      <>NATS {natsConnected ? '✓' : '✗'}</>
+                    )}
+                  </div>
+                )}
                 <div className={`header-chip ${health.ollama_available ? 'chip-ok' : 'chip-off'}`}>
                   Gemma {health.ollama_available ? '✓' : '✗'}
                 </div>
@@ -192,7 +303,9 @@ function AppContent() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <NatsProvider>
+        <AppContent />
+      </NatsProvider>
     </QueryClientProvider>
   )
 }

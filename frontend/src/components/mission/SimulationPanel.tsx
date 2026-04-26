@@ -14,14 +14,12 @@ interface SimulationPanelProps {
   onReset?: () => void
 }
 
-// Human-readable label for ocean state source
 function sourceLabel(src: string): string {
   if (src.includes('noaa_erddap')) return 'NOAA ERDDAP + CalCOFI'
   if (src === 'calcofi') return 'CalCOFI stations'
   return 'offline defaults'
 }
 
-// Badge colour for simulation source
 function sourceBadgeClass(src: string): string {
   if (src === 'live') return 'badge-live'
   if (src === 'live-conditions') return 'badge-live-cond'
@@ -32,6 +30,28 @@ export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLa
   const [vesselSpeed, setVesselSpeed] = useState(5.0)
   const [dischargeRate, setDischargeRate] = useState(0.5)
   const [feedstock, setFeedstock] = useState<'olivine' | 'sodium_hydroxide'>('olivine')
+
+  // Advanced ocean overrides
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [useManualOcean, setUseManualOcean] = useState(false)
+  const [temperature, setTemperature] = useState(15.0)
+  const [salinity, setSalinity] = useState(35.0)
+  const [mld, setMld] = useState(60.0)
+
+  const handleRun = () => {
+    onRun({
+      vessel: { vessel_speed: vesselSpeed, discharge_rate: dischargeRate },
+      feedstock: { feedstock_type: feedstock },
+      ocean: useManualOcean
+        ? { temperature, salinity, mixed_layer_depth: mld }
+        : { temperature: 15.0, salinity: 35.0 },
+    })
+  }
+
+  // Show live ocean data from last result when not using manual
+  const liveTemp = result?.ocean_conditions?.temperature_c
+  const liveSal = result?.ocean_conditions?.salinity_psu
+  const liveMld = result?.ocean_conditions?.mixed_layer_depth_m
 
   return (
     <div className="panel">
@@ -49,13 +69,86 @@ export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLa
       />
       <FeedstockPicker value={feedstock} onChange={setFeedstock} />
 
+      {/* Advanced ocean settings toggle */}
+      <button
+        className="advanced-toggle"
+        onClick={() => setShowAdvanced(s => !s)}
+      >
+        <span>Ocean Conditions</span>
+        <span className={`adv-chevron ${showAdvanced ? 'open' : ''}`}>›</span>
+      </button>
+
+      <AnimatePresence>
+        {showAdvanced && (
+          <motion.div
+            className="advanced-section"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 36 }}
+          >
+            {/* Toggle: live vs manual */}
+            <div className="ocean-mode-row">
+              <span className="ocean-mode-label">Source</span>
+              <div className="ocean-mode-toggle">
+                <button
+                  className={`ocean-mode-btn ${!useManualOcean ? 'active' : ''}`}
+                  onClick={() => setUseManualOcean(false)}
+                >
+                  Live NOAA
+                </button>
+                <button
+                  className={`ocean-mode-btn ${useManualOcean ? 'active' : ''}`}
+                  onClick={() => setUseManualOcean(true)}
+                >
+                  Manual
+                </button>
+              </div>
+            </div>
+
+            {!useManualOcean && liveTemp != null && (
+              <div className="live-ocean-preview">
+                <div className="live-ocean-chip">
+                  <span className="loc-val">{liveTemp.toFixed(1)}°C</span>
+                  <span className="loc-lbl">SST</span>
+                </div>
+                <div className="live-ocean-chip">
+                  <span className="loc-val">{liveSal?.toFixed(1) ?? '—'}</span>
+                  <span className="loc-lbl">PSU</span>
+                </div>
+                <div className="live-ocean-chip">
+                  <span className="loc-val">{liveMld?.toFixed(0) ?? '—'}m</span>
+                  <span className="loc-lbl">MLD</span>
+                </div>
+              </div>
+            )}
+
+            {useManualOcean && (
+              <div className="manual-ocean-sliders">
+                <ParamSlider
+                  label="Temperature" value={temperature}
+                  min={-2} max={35} step={0.5} unit="°C"
+                  onChange={setTemperature}
+                />
+                <ParamSlider
+                  label="Salinity" value={salinity}
+                  min={30} max={40} step={0.1} unit="PSU"
+                  onChange={setSalinity}
+                />
+                <ParamSlider
+                  label="Mixed Layer Depth" value={mld}
+                  min={10} max={200} step={5} unit="m"
+                  onChange={setMld}
+                />
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <motion.button
         className="run-btn"
-        onClick={() => onRun({
-          vessel: { vessel_speed: vesselSpeed, discharge_rate: dischargeRate },
-          feedstock: { feedstock_type: feedstock },
-          ocean: { temperature: 15.0, salinity: 35.0 },
-        })}
+        onClick={handleRun}
         disabled={isLoading}
         whileHover={{ scale: isLoading ? 1 : 1.015 }}
         whileTap={{ scale: isLoading ? 1 : 0.985 }}
@@ -123,7 +216,6 @@ export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLa
               </div>
             </div>
 
-            {/* Real ocean conditions used in simulation */}
             {result.ocean_conditions && (
               <div className="ocean-conditions">
                 <div className="ocean-conditions-header">

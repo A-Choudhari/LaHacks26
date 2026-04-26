@@ -3,7 +3,16 @@ export type AppMode = 'global' | 'mission' | 'route'
 export interface SimulationParams {
   vessel: { vessel_speed: number; discharge_rate: number }
   feedstock: { feedstock_type: 'olivine' | 'sodium_hydroxide' }
-  ocean: { temperature: number; salinity: number }
+  ocean: { temperature: number; salinity: number; mixed_layer_depth?: number }
+}
+
+export interface OptimizeResult {
+  suggested_vessel_speed: number
+  suggested_discharge_rate: number
+  suggested_feedstock: string
+  reasoning: string
+  projected_improvement_pct: number
+  model_used: string
 }
 
 export interface OceanConditions {
@@ -123,4 +132,55 @@ export interface GlobalHotspot {
   sst_c: number
   wind_m_s: number | null   // real QuikSCAT/ASCAT wind speed (m/s), null if unavailable
   oae_score: number         // composite: SST×0.30 + Wind×0.30 + Lat×0.25 + Upwelling bonus
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NATS Message Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Base NATS message envelope with timestamp and sequence for idempotence */
+export interface NatsMessageEnvelope<T = unknown> {
+  ts: number      // Unix ms timestamp
+  seq: number     // Monotonic sequence for dedup
+  data: T
+}
+
+/** health.backend message payload */
+export interface NatsHealthMsg {
+  status: string
+  julia_available: boolean
+  mock_data_available: boolean
+  ollama_available: boolean
+  ais_live: boolean
+  ais_vessels: number
+}
+
+/** fleet.{ship_id}.position message payload */
+export interface NatsFleetPositionMsg {
+  ship_id: string
+  lat: number
+  lon: number
+  heading: number
+  speed_kn: number
+}
+
+/** fleet.{ship_id}.status message payload */
+export interface NatsFleetStatusMsg {
+  ship_id: string
+  status: 'active' | 'idle' | 'deploying'
+  co2_removed_tons: number
+}
+
+/** ais.batch message payload */
+export interface NatsAISBatchMsg {
+  count: number
+  vessels: Array<{
+    mmsi: string
+    lat: number
+    lon: number
+    heading: number
+    speed_kn: number
+    vessel_type: string
+    conflict_risk: boolean
+  }>
 }
