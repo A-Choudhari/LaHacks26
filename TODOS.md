@@ -99,7 +99,7 @@ Tasks below are ordered for execution. Complete each group before moving to the 
 
 - [x] **RoutePlanning crash fix** — `ReferenceError: waypoints is not defined` at line 116: removed broken `routeGeoJSON` useMemo, added `hotspots`/`isDiscovering`/`routesComputed` state, added `computeRoutes()` async function calling `POST /discover`. Fleet tab now always shows compute button. `tsc --noEmit` passes with zero errors.
 - [x] **Agents architecture — fully local** — removed all ADK/Gemini cloud dependency. New flow: Ollama/Gemma4 (local) → rule-based fallback. `base.py` provides `query_gemma()` + `extract_json()`. `GeochemistAgent` and `SpatialIntelligenceAgent` both call deterministic tool functions then send results to Gemma4 for natural-language synthesis. `httpx` import guarded for benchmark compatibility.
-- [x] **Gemma 4 validated** — all agents use `GEMMA_MODEL=gemma4:e4b` (env override supported). `is_ollama_available()` verifies model is loaded before calling.
+- [x] **Gemma 4 validated** — all agents use `GEMMA_MODEL=gemma4:31b` (env override supported). `is_ollama_available()` verifies model is loaded before calling.
 - [x] **Algorithm benchmarks** — `backend/benchmarks.py` — 12/12 checks pass: haversine max error 1.5%, greedy TSP 1.054x optimal mean, all 6 zones assigned, hotspot scoring validated (Southern Ocean 0.931, California Current 0.715, tropics <0.70), score monotonicity, MPA detection, ocean state plausibility, score determinism. Results saved to `data/benchmark_results.json`. Run with `PYTHONIOENCODING=utf-8 python benchmarks.py`.
 - [x] **Removed unused `trafficGeoJSON` useMemo** from `RoutePlanning.tsx` (was causing TS6133 error).
 
