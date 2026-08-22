@@ -225,7 +225,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
 
   const ANIM_DURATION = 1800 // ms for the full draw
 
-  // Kick off animation whenever routes are freshly computed
+  // Kick off animation once when fast phase completes — not on every hotspot update
   useEffect(() => {
     if (!routesComputed) { setAnimProgress(0); return }
     setAnimProgress(0)
@@ -241,61 +241,72 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
     rafRef.current = requestAnimationFrame(tick)
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routesComputed, hotspots])
+  }, [routesComputed])
 
   const [agentRoutes, setAgentRoutes] = useState<AgentRoute[] | null>(null)
   const [agentReasoning, setAgentReasoning] = useState<string>('')
   const [agentModel, setAgentModel] = useState<string>('')
-  const [fleetCO2, setFleetCO2] = useState<number>(0)
 
   const computeRoutes = async () => {
     setIsDiscovering(true)
+    setRoutesComputed(false)
+    setHotspots([])
     setAgentRoutes(null)
     setAgentReasoning('')
-    try {
-      // Phase 1: discover high-value zones
-      const discRes = await fetch(`${API_URL}/discover`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat: 33.80, lon: -119.50, radius_km: 500 }),
-      })
-      const discData = await discRes.json()
-      const zones: DiscoveryZone[] = discData.zones ?? discData
-      setHotspots(zones)
+    setAgentModel('')
 
-      // Phase 2: agentic route planning (MPA avoidance + CO2 maximization)
-      // Use localPositions to respect dragged ship positions
-      const shipInputs = (fleet ?? []).map(s => {
-        const pos = localPositions[s.ship_id] ?? s.position
-        return {
-          ship_id:   s.ship_id,
-          ship_name: s.name,
-          lat:       pos.lat,
-          lon:       pos.lon,
+    try {
+      const response = await fetch(`${API_URL}/discover/stream`)
+      if (!response.ok || !response.body) throw new Error('stream unavailable')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let siteIndex = 0
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const chunks = buffer.split('\n\n')
+        buffer = chunks.pop() ?? ''
+
+        for (const chunk of chunks) {
+          const dataLine = chunk.split('\n').find(l => l.startsWith('data: '))
+          if (!dataLine) continue
+          try {
+            const payload = JSON.parse(dataLine.slice(6))
+
+            if (payload.event === 'fast_done') {
+              // All provisional sites received — start route animation immediately
+              setRoutesComputed(true)
+            } else if (payload.event === 'done') {
+              setIsDiscovering(false)
+            } else if (payload.phase === 'fast') {
+              const name = `Site ${String.fromCharCode(65 + siteIndex++)}`
+              setHotspots(prev => [...prev, {
+                lat: payload.lat,
+                lon: payload.lon,
+                score: payload.score,
+                reason: payload.reason,
+                mpa_conflict: payload.mpa_conflict,
+                name,
+              }])
+            } else if (payload.phase === 'ai') {
+              // Enrich existing site with AI score/reason without resetting animation
+              setHotspots(prev => prev.map(h =>
+                Math.abs(h.lat - payload.lat) < 0.001 && Math.abs(h.lon - payload.lon) < 0.001
+                  ? { ...h, score: payload.score, reason: payload.reason }
+                  : h
+              ))
+            }
+          } catch { /* skip malformed SSE events */ }
         }
-      })
-      const zoneInputs = zones.map(z => ({
-        lat: z.lat, lon: z.lon,
-        score: z.score,
-        name: z.name ?? undefined,
-        reason: z.reason,
-      }))
-      const planRes = await fetch(`${API_URL}/route-plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ships: shipInputs, zones: zoneInputs }),
-      })
-      if (planRes.ok) {
-        const plan = await planRes.json()
-        setAgentRoutes(plan.routes)
-        setAgentReasoning(plan.agent_reasoning ?? '')
-        setAgentModel(plan.model_used ?? '')
-        setFleetCO2(plan.fleet_co2_estimate ?? 0)
       }
-      setRoutesComputed(true)
     } catch (e) {
-      console.error('route plan failed', e)
-      setRoutesComputed(true)  // still show greedy fallback
+      console.error('route discovery stream failed', e)
+      setRoutesComputed(true)
     } finally {
       setIsDiscovering(false)
     }
@@ -357,7 +368,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
       : 0
 
   const totalFleetCO2 = agentRoutes
-    ? fleetCO2
+    ? agentRoutes.reduce((sum, r) => sum + r.co2_estimate_tons, 0)
     : routes.reduce((sum, r) => sum + r.totalKm * 2.1, 0)
 
   // Unified route list for map + sidebar: prefer agent result, fall back to greedy

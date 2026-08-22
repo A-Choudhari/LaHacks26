@@ -1,0 +1,54 @@
+name: Lint Helm Chart
+
+on:
+  pull_request:
+    paths:
+      - "infra/helm/**"
+      - ".github/workflows/helm-lint.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/helm/**"
+
+jobs:
+  helm-lint:
+    name: Helm Lint & Template Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "3.14.0"   # TODO: pin to the version you use locally
+
+      - name: Lint chart (default values)
+        run: |
+          helm lint infra/helm/oceanops
+
+      - name: Lint chart (dev values)
+        run: |
+          helm lint infra/helm/oceanops -f infra/helm/oceanops/values.dev.yaml
+
+      - name: Lint chart (prod values)
+        run: |
+          helm lint infra/helm/oceanops -f infra/helm/oceanops/values.prod.yaml
+
+      - name: Dry-run template render (dev)
+        run: |
+          helm template oceanops infra/helm/oceanops \
+            -f infra/helm/oceanops/values.dev.yaml \
+            --debug > /dev/null
+
+      - name: Dry-run template render (prod)
+        run: |
+          helm template oceanops infra/helm/oceanops \
+            -f infra/helm/oceanops/values.prod.yaml \
+            --debug > /dev/null
+
+      # TODO (optional): install chart-testing (ct) for more thorough checks
+      # - name: Run chart-testing
+      #   uses: helm/chart-testing-action@v2
+      #   ...

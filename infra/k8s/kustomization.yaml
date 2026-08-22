@@ -1,0 +1,26 @@
+# kustomization.yaml — apply all raw manifests with a single command:
+#   kubectl apply -k infra/k8s/
+#
+# Kustomize is built into kubectl since v1.14 — no extra install needed.
+# Resources are applied in the listed order (dependencies first).
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: oceanops
+
+resources:
+  - namespace.yaml
+  - nats/configmap.yaml
+  - nats/deployment.yaml
+  - nats/service.yaml
+  - ollama/deployment.yaml
+  - ollama/service.yaml
+  - backend/configmap.yaml
+  - backend/deployment.yaml
+  - backend/service.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+
+# TODO (Week 4): add HPA resources here once manifests are stable
+# - ../scaling/hpa.yaml

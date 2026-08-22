@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: oceanops
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+  # TODO (stretch): switch to LoadBalancer or add an Ingress + TLS termination
+  #   when deploying to a real cloud cluster

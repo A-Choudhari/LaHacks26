@@ -1,0 +1,82 @@
+# alerts.yaml — Prometheus alerting rules for OceanOps
+#
+# Apply independently (before or after kube-prometheus-stack):
+#   kubectl apply -f infra/observability/prometheus/alerts.yaml
+#
+# TODO: implement the alert expressions. Each rule has a commented-out
+#       `expr` showing what to measure — fill in the thresholds.
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: oceanops-alerts
+  namespace: monitoring
+  labels:
+    # This label makes kube-prometheus-stack pick up this rule automatically
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: oceanops.backend
+      interval: 30s
+      rules:
+        # ── Backend availability ──────────────────────────────────────────
+        - alert: BackendDown
+          # TODO: fill in the expr. Hint: kube_deployment_status_replicas_available
+          expr: "TODO"
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "OceanOps backend has 0 available replicas"
+            description: "The backend Deployment has had 0 available pods for >1 minute."
+
+        # ── High error rate ───────────────────────────────────────────────
+        - alert: HighErrorRate
+          # TODO: use the HTTP request duration/count metrics from
+          #   prometheus-fastapi-instrumentator (install it in backend first):
+          #   pip install prometheus-fastapi-instrumentator
+          #   from prometheus_fastapi_instrumentator import Instrumentator
+          #   Instrumentator().instrument(app).expose(app)
+          # expr: |
+          #   rate(http_requests_total{status=~"5.."}[5m]) /
+          #   rate(http_requests_total[5m]) > 0.05
+          expr: "TODO"
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backend 5xx error rate >5%"
+
+        # ── High memory ───────────────────────────────────────────────────
+        - alert: BackendHighMemory
+          # expr: |
+          #   container_memory_working_set_bytes{pod=~".*backend.*"} /
+          #   container_spec_memory_limit_bytes{pod=~".*backend.*"} > 0.85
+          expr: "TODO"
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backend memory usage >85% of limit"
+
+    - name: oceanops.nats
+      interval: 30s
+      rules:
+        - alert: NATSDown
+          expr: "TODO"
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NATS server is unreachable"
+
+    - name: oceanops.ollama
+      interval: 60s
+      rules:
+        - alert: OllamaDown
+          expr: "TODO"
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Ollama is unreachable — AI analysis will fall back to rule-based"

@@ -1,0 +1,138 @@
+# values.yaml — Default values for the OceanOps Helm chart
+#
+# Override per-environment with:
+#   helm install oceanops . -f values.dev.yaml    (development)
+#   helm install oceanops . -f values.prod.yaml   (production)
+#
+# All TODO items here are things you need to tune; defaults are safe starting points.
+
+# ── Global ────────────────────────────────────────────────────────────────────
+global:
+  imageRegistry: ""   # TODO: set to your registry prefix, e.g. "ghcr.io/your-org"
+  imageTag: "dev"     # TODO: CI will override this with the git SHA
+
+# ── Backend ───────────────────────────────────────────────────────────────────
+backend:
+  replicaCount: 1
+  image:
+    repository: oceanops/backend
+    tag: ""           # defaults to global.imageTag
+    pullPolicy: IfNotPresent
+
+  env:
+    USE_MOCK: "true"
+    PORT: "8000"
+    # NATS_URL and OLLAMA_BASE_URL are injected by the chart template using
+    # in-cluster service DNS — do not override here
+
+  # TODO (Week 4): configure resource limits after profiling
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  # TODO (Week 3): enable probes — they must match your FastAPI /health route
+  readinessProbe:
+    enabled: false
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+  livenessProbe:
+    enabled: false
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 20
+
+  # TODO (Week 3): enable Prometheus scraping after adding /metrics endpoint
+  metrics:
+    enabled: false
+    port: 8000
+    path: /metrics
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+frontend:
+  replicaCount: 1
+  image:
+    repository: oceanops/frontend
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+  readinessProbe:
+    enabled: false
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# ── NATS ──────────────────────────────────────────────────────────────────────
+nats:
+  replicaCount: 1
+  image:
+    repository: nats
+    tag: "2.10-alpine"
+    pullPolicy: IfNotPresent
+
+  jetstream:
+    enabled: true
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# ── Ollama ────────────────────────────────────────────────────────────────────
+ollama:
+  replicaCount: 1
+  image:
+    repository: ollama/ollama
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  model: "gemma4:e4b"   # TODO: pulled by init container
+
+  gpu:
+    enabled: false       # TODO: set true in prod values when running on GPU node
+
+  persistence:
+    enabled: false       # TODO: enable + set size once you have a StorageClass
+    size: 20Gi
+    storageClass: ""
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+# ── HPA (Week 4) ──────────────────────────────────────────────────────────────
+autoscaling:
+  enabled: false         # TODO: enable in Week 4
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  # targetMemoryUtilizationPercentage: 80
+
+# ── Ingress (Stretch goal) ────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: "nginx"
+  host: "oceanops.example.com"   # TODO: replace with real domain
+  tls:
+    enabled: false
+    secretName: "oceanops-tls"

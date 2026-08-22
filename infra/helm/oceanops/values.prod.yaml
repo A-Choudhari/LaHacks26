@@ -1,0 +1,45 @@
+# values.prod.yaml — Production overrides
+# Usage: helm install oceanops . -f values.prod.yaml
+#
+# In prod: probes enabled, HPA on, GPU enabled, real limits, persistence on.
+# TODO: fill in real values as you harden the deployment.
+
+global:
+  imageRegistry: "ghcr.io/your-org"  # TODO: set your registry
+  imageTag: "latest"                  # TODO: CI will set this to the git SHA
+
+backend:
+  replicaCount: 2
+  env:
+    USE_MOCK: "false"
+  readinessProbe:
+    enabled: true
+  livenessProbe:
+    enabled: true
+  metrics:
+    enabled: true
+
+frontend:
+  replicaCount: 2
+  readinessProbe:
+    enabled: true
+
+ollama:
+  gpu:
+    enabled: true   # TODO: ensure node pool has nvidia.com/gpu label
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: "standard"  # TODO: match your cloud provider's StorageClass name
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+ingress:
+  enabled: true
+  host: "oceanops.yourdomain.com"  # TODO: set real domain
+  tls:
+    enabled: true

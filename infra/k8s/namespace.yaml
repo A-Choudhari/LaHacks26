@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oceanops
+  labels:
+    app.kubernetes.io/name: oceanops
+    # TODO: add network policy labels here if you add Linkerd later

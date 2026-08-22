@@ -1,0 +1,78 @@
+# ── Backend Deployment ────────────────────────────────────────────────────────
+# TODO: replace `image` with your registry path once CI/CD is set up.
+#       Local kind cluster: use `kind load docker-image oceanops/backend:dev`
+#       instead of a registry.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: oceanops
+  labels:
+    app: backend
+spec:
+  replicas: 1   # TODO (Week 4): HPA will manage this — remove hardcoded value
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+      annotations:
+        # TODO (Week 3): Prometheus scraping annotation — uncomment once
+        #   you've added a /metrics endpoint (prometheus-fastapi-instrumentator)
+        # prometheus.io/scrape: "true"
+        # prometheus.io/port: "8000"
+        # prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: backend
+          image: oceanops/backend:dev   # TODO: update tag from CI
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          # TODO: reference Secret for AISSTREAM_API_KEY:
+          # env:
+          #   - name: AISSTREAM_API_KEY
+          #     valueFrom:
+          #       secretKeyRef:
+          #         name: oceanops-secrets
+          #         key: aisstream-api-key
+          volumeMounts:
+            - name: ais-data
+              mountPath: /app/data/real
+            - name: mrv-log
+              mountPath: /app/data
+          # ── Probes (Week 3 — implement these) ─────────────────────────────
+          # readinessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: 8000
+          #   initialDelaySeconds: 10
+          #   periodSeconds: 10
+          #   failureThreshold: 3
+          # livenessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: 8000
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 20
+          #   failureThreshold: 3
+          # ──────────────────────────────────────────────────────────────────
+          resources:
+            requests:
+              # TODO: profile under load, then tune. Start conservative.
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      volumes:
+        - name: ais-data
+          emptyDir: {}   # TODO: replace with PVC for persistent AIS data
+        - name: mrv-log
+          emptyDir: {}   # TODO: replace with PVC for persistent MRV audit log

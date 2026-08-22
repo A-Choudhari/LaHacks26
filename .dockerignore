@@ -1,0 +1,31 @@
+# .dockerignore — place this at the REPO ROOT before your first docker build
+# Without this, Docker will send your entire workspace as build context (~GB)
+
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.env
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# Data (do NOT bake real data into the image; mount it as a volume)
+data/real/
+data/*.jsonl
+
+# Git + IDE
+.git/
+.gitignore
+.claude/
+**/.DS_Store
+
+# Infra (no need to bake K8s/Helm files into runtime images)
+infra/

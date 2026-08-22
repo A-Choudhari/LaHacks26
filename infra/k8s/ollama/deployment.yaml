@@ -1,0 +1,86 @@
+# ── Ollama Deployment ─────────────────────────────────────────────────────────
+# Ollama runs the Gemma4 model. It is CPU-only unless you add GPU node affinity.
+# Model files are ~8GB — persist them in a PVC so they survive pod restarts.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: oceanops
+  labels:
+    app: ollama
+spec:
+  replicas: 1   # Do NOT scale horizontally — models are pinned to one node's GPU
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      # TODO (GPU path): add node affinity to pin to the GPU node
+      # affinity:
+      #   nodeAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       nodeSelectorTerms:
+      #         - matchExpressions:
+      #             - key: nvidia.com/gpu
+      #               operator: Exists
+      initContainers:
+        # TODO: pull the Gemma4 model on first boot.
+        #   This init container runs `ollama pull gemma4:e4b` before the main
+        #   container starts. Remove once you have the PVC pre-populated.
+        - name: pull-model
+          image: ollama/ollama:latest
+          command:
+            - sh
+            - -c
+            - |
+              # TODO: uncomment once you've verified Ollama starts correctly
+              # ollama serve &
+              # sleep 5
+              # ollama pull gemma4:e4b
+              echo "TODO: implement model pull init container"
+          volumeMounts:
+            - name: ollama-models
+              mountPath: /root/.ollama
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          ports:
+            - containerPort: 11434
+          volumeMounts:
+            - name: ollama-models
+              mountPath: /root/.ollama
+          # ── Probes ─────────────────────────────────────────────────────
+          # readinessProbe:
+          #   httpGet:
+          #     path: /api/tags
+          #     port: 11434
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 15
+          #   failureThreshold: 5
+          # livenessProbe:
+          #   httpGet:
+          #     path: /api/tags
+          #     port: 11434
+          #   initialDelaySeconds: 60
+          #   periodSeconds: 30
+          # ───────────────────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "4Gi"   # Gemma4 needs ~4-8GB depending on quantization
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+              # TODO (GPU): add GPU limit
+              # nvidia.com/gpu: "1"
+      volumes:
+        - name: ollama-models
+          # TODO: replace emptyDir with a PVC so the 8GB model isn't
+          #       re-downloaded every time the pod restarts
+          emptyDir: {}
+          # persistentVolumeClaim:
+          #   claimName: ollama-models-pvc

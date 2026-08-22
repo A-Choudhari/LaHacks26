@@ -1,0 +1,110 @@
+{{/*
+  backend.yaml — Helm template for the FastAPI backend
+
+  TODO: This is the template you need to fill in. The structure mirrors
+  infra/k8s/backend/deployment.yaml but uses .Values references so that
+  dev/prod values files control the behavior.
+
+  Pattern to follow for every value reference:
+    {{ .Values.backend.replicaCount }}
+    {{ include "oceanops.image" (dict "global" .Values.global "service" .Values.backend) }}
+*/}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oceanops.fullname" . }}-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "oceanops.labels" . | nindent 4 }}
+    app: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+      {{- if .Values.backend.metrics.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.backend.metrics.port | quote }}
+        prometheus.io/path: {{ .Values.backend.metrics.path }}
+      {{- end }}
+    spec:
+      containers:
+        - name: backend
+          image: {{ include "oceanops.image" (dict "global" .Values.global "service" .Values.backend) }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: {{ include "oceanops.fullname" . }}-backend-config
+          {{- if .Values.backend.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.backend.readinessProbe.path }}
+              port: 8000
+            initialDelaySeconds: {{ .Values.backend.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.readinessProbe.periodSeconds }}
+          {{- end }}
+          {{- if .Values.backend.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.backend.livenessProbe.path }}
+              port: 8000
+            initialDelaySeconds: {{ .Values.backend.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.livenessProbe.periodSeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "oceanops.fullname" . }}-backend-config
+  namespace: {{ .Release.Namespace }}
+data:
+  NATS_URL: "nats://{{ include "oceanops.fullname" . }}-nats:4222"
+  OLLAMA_BASE_URL: "http://{{ include "oceanops.fullname" . }}-ollama:11434"
+  USE_MOCK: {{ .Values.backend.env.USE_MOCK | quote }}
+  PORT: {{ .Values.backend.env.PORT | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oceanops.fullname" . }}-backend
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+{{- if .Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "oceanops.fullname" . }}-backend-hpa
+  namespace: {{ .Release.Namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "oceanops.fullname" . }}-backend
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

@@ -108,6 +108,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Prometheus metrics — exposes /metrics for Grafana scraping.
+# The kube-prometheus-stack picks this up via the prometheus.io/scrape pod annotation.
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator().instrument(app).expose(app)
+except ImportError:
+    logger.warning("prometheus-fastapi-instrumentator not installed; /metrics disabled")
+
 # CORS for React frontend
 app.add_middleware(
     CORSMiddleware,

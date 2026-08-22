@@ -1,0 +1,9 @@
+apiVersion: v2
+name: oceanops
+description: OceanOps — OAE Simulation Platform
+type: application
+version: 0.1.0       # Chart version (bump on every chart change)
+appVersion: "0.1.0"  # Application version (matches Docker image tag)
+
+# TODO: once you publish this to a chart repo, add a home and icon URL
+# home: https://github.com/your-org/LaHacks26

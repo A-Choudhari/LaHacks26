@@ -1,0 +1,16 @@
+# ── Backend ConfigMap ─────────────────────────────────────────────────────────
+# Non-secret env vars only. Secrets (API keys) go in a K8s Secret object.
+# Reference this ConfigMap via envFrom in the backend Deployment.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: oceanops
+data:
+  NATS_URL: "nats://nats:4222"
+  OLLAMA_BASE_URL: "http://ollama:11434"
+  USE_MOCK: "true"
+  # TODO: set to "false" and add julia sidecar when you want live simulations
+  PORT: "8000"
+  # TODO: add CORS_ORIGINS override if your frontend domain changes

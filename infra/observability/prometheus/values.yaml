@@ -1,0 +1,76 @@
+# prometheus-values.yaml — Overrides for kube-prometheus-stack
+#
+# Install command:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     --namespace monitoring --create-namespace \
+#     -f infra/observability/prometheus/values.yaml
+#
+# TODO: fill in each section as you reach Week 3.
+
+# ── Prometheus ────────────────────────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    # TODO: set retention to match your storage budget
+    retention: 7d
+    # TODO: add a PVC if you want metrics to survive pod restarts
+    # storageSpec:
+    #   volumeClaimTemplate:
+    #     spec:
+    #       resources:
+    #         requests:
+    #           storage: 10Gi
+
+    # Scrape the oceanops namespace automatically via pod annotations
+    podMonitorNamespaceSelector: {}
+    serviceMonitorNamespaceSelector: {}
+
+    # TODO: add alerting rules (see infra/observability/prometheus/alerts.yaml)
+    additionalScrapeConfigs: []
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+  # TODO: change this password before any real deployment
+  adminPassword: "changeme"
+
+  # TODO: import OceanOps custom dashboard (see infra/observability/grafana/)
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: oceanops
+          orgId: 1
+          folder: OceanOps
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/oceanops
+
+  # TODO: mount your dashboard JSON here
+  # dashboards:
+  #   oceanops:
+  #     oceanops-overview:
+  #       json: |
+  #         { ... }
+
+# ── AlertManager ─────────────────────────────────────────────────────────────
+alertmanager:
+  enabled: true
+  # TODO: configure receivers (Slack, email, PagerDuty) for alerts
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: "null"   # TODO: replace "null" with a real receiver
+    receivers:
+      - name: "null"
+      # - name: slack
+      #   slack_configs:
+      #     - api_url: https://hooks.slack.com/...
+      #       channel: "#oceanops-alerts"

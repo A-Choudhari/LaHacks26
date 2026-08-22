@@ -1,0 +1,84 @@
+# hpa.yaml — Horizontal Pod Autoscaler for the backend (Week 4)
+#
+# Prerequisites before applying:
+#   1. metrics-server must be running in the cluster
+#      kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#   2. backend Deployment must have resource requests set (already done in deployment.yaml)
+#   3. Verify with: kubectl top pods -n oceanops
+#
+# Apply: kubectl apply -f infra/scaling/hpa.yaml
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: oceanops
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend   # Must match the Deployment name exactly
+  minReplicas: 1
+  maxReplicas: 5    # TODO: tune based on your node capacity
+
+  metrics:
+    # Scale on CPU utilization
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70   # TODO: adjust after load testing
+
+    # TODO (optional): add memory-based scaling if simulations spike memory
+    # - type: Resource
+    #   resource:
+    #     name: memory
+    #     target:
+    #       type: Utilization
+    #       averageUtilization: 80
+
+    # TODO (optional): custom metric based on NATS queue depth — more relevant
+    #   than CPU for message-driven workloads. Requires KEDA or custom adapter.
+    # - type: External
+    #   external:
+    #     metric:
+    #       name: nats_consumer_num_pending
+    #     target:
+    #       type: AverageValue
+    #       averageValue: "10"
+
+  # Tuning: how aggressively to scale up vs scale down
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30    # React quickly to load
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300   # Wait 5 min before scaling down (avoid flapping)
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WEEK 4 DRILL — Pod failure simulation
+#
+# Run these to test self-healing:
+#
+#   # Watch pod status in real time
+#   kubectl get pods -n oceanops -w
+#
+#   # Simulate pod crash (force delete)
+#   kubectl delete pod -n oceanops -l app=backend --force --grace-period=0
+#
+#   # Watch HPA activity
+#   kubectl describe hpa backend-hpa -n oceanops
+#
+#   # Generate load to trigger scale-up (install hey: brew install hey)
+#   hey -z 60s -c 10 http://localhost:8000/health
+#
+# Expected: K8s should reschedule the deleted pod within ~30s.
+# ─────────────────────────────────────────────────────────────────────────────

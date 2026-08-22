@@ -1,0 +1,35 @@
+# values.dev.yaml — Development overrides
+# Usage: helm install oceanops . -f values.dev.yaml
+#
+# In dev: lower resource limits, probes disabled, USE_MOCK=true, no GPU
+
+backend:
+  replicaCount: 1
+  env:
+    USE_MOCK: "true"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ollama:
+  gpu:
+    enabled: false
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+autoscaling:
+  enabled: false
+
+ingress:
+  enabled: false
