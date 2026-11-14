@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import Map, { Marker, MapRef } from 'react-map-gl'
+import Map, { Marker } from 'react-map-gl/maplibre'
 import { motion, AnimatePresence } from 'framer-motion'
-import { API_URL, MAPBOX_TOKEN } from '../constants'
+import { API_URL, MAP_STYLE } from '../constants'
 import type { SimulationParams, SimulationResult, ShipStatus } from '../types'
 import { SimulationPanel } from '../components/mission/SimulationPanel'
 import { AIPanel } from '../components/mission/AIPanel'
@@ -15,9 +15,9 @@ import { AISLayer } from '../components/shared/AISLayer'
 import { PlumeHeatmap } from '../components/shared/PlumeHeatmap'
 import { MapLegend } from '../components/shared/MapLegend'
 import { ImpactMetrics } from '../components/shared/ImpactMetrics'
-import type { PlumeThreeLayer } from '../ThreeLayer'
 
 interface MissionControlProps {
+  demoMode?: boolean
   fleet?: ShipStatus[]
   fleetLoading?: boolean
   traffic?: any[]
@@ -45,7 +45,7 @@ function advanceShip(ship: ShipStatus, dtMs: number): ShipStatus {
   return { ...ship, position: { lat: ship.position.lat + dLat, lon: ship.position.lon + dLon } }
 }
 
-export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: MissionControlProps) {
+export function MissionControl({ fleet: initialFleet, fleetLoading, traffic, demoMode }: MissionControlProps) {
   const { data: mpaData } = useMPAData()
   const [simulationResult, setSimulationResult] = useState<SimulationResult>()
   const [lastParams, setLastParams] = useState<SimulationParams>()
@@ -60,8 +60,6 @@ export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: M
     if (initialFleet?.length) setLiveShips(initialFleet)
   }, [initialFleet])
 
-  const mapRef = useRef<MapRef>(null)
-  const threeLayerRef = useRef<PlumeThreeLayer | null>(null)
   const tickRef = useRef<number | null>(null)
   const simRefreshRef = useRef<number | null>(null)
 
@@ -122,48 +120,12 @@ export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: M
 
   // ── Periodic simulation refresh ─────────────────────────────────────────
   useEffect(() => {
-    if (!isRunning) { if (simRefreshRef.current) clearInterval(simRefreshRef.current); return }
+    if (!isRunning || demoMode) { if (simRefreshRef.current) clearInterval(simRefreshRef.current); return }
     simRefreshRef.current = window.setInterval(() => {
       simulate.mutate(lastParams ?? defaultParams)
     }, SIM_REFRESH_MS)
     return () => { if (simRefreshRef.current) clearInterval(simRefreshRef.current) }
-  }, [isRunning, lastParams]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Three.js plume layer ─────────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      try {
-        const map = mapRef.current?.getMap()
-        if (map?.getLayer('plume-three-layer')) map.removeLayer('plume-three-layer')
-      } catch {}
-    }
-  }, [])
-
-  const handleMapLoad = useCallback(() => {
-    const map = mapRef.current?.getMap()
-    if (!map) return
-    import('../ThreeLayer').then(({ PlumeThreeLayer }) => {
-      try {
-        if (map.getLayer('plume-three-layer')) map.removeLayer('plume-three-layer')
-        const layer = new PlumeThreeLayer(null)
-        threeLayerRef.current = layer
-        map.addLayer(layer)
-      } catch (err) {
-        console.warn('PlumeThreeLayer init failed:', err)
-      }
-    }).catch(err => console.warn('ThreeLayer module load failed:', err))
-  }, [])
-
-  useEffect(() => {
-    if (!simulationResult?.fields?.aragonite_saturation || !simulationResult.coordinates) return
-    threeLayerRef.current?.updateData({
-      fields: {
-        alkalinity: simulationResult.fields.alkalinity ?? [],
-        aragonite_saturation: simulationResult.fields.aragonite_saturation,
-      },
-      coordinates: simulationResult.coordinates,
-    })
-  }, [simulationResult])
+  }, [isRunning, lastParams, demoMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeShip = liveShips.find(s => s.status === 'deploying') ?? liveShips[0]
 
@@ -189,6 +151,7 @@ export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: M
         <div data-tour="mc-sim-panel">
           <SimulationPanel
             onRun={handleRun}
+            demoMode={demoMode}
             isLoading={simulate.isPending}
             result={simulationResult}
             isRunning={isRunning}
@@ -209,13 +172,10 @@ export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: M
       {/* ── Map ── */}
       <div className="map-container" data-tour="mc-map">
         <Map
-          ref={mapRef}
           initialViewState={{ longitude: -120.0, latitude: 33.8, zoom: 6.5 }}
           style={{ width: '100%', height: '100%' }}
-          mapStyle="mapbox://styles/mapbox/dark-v11"
-          mapboxAccessToken={MAPBOX_TOKEN}
+          mapStyle={MAP_STYLE}
           reuseMaps
-          onLoad={handleMapLoad}
         >
           <MPAOverlay data={mpaData} />
           <AISLayer vessels={traffic} />
@@ -244,8 +204,9 @@ export function MissionControl({ fleet: initialFleet, fleetLoading, traffic }: M
 
         <div className="sim-status-bar">
           <div className={`sim-status-dot ${isRunning ? 'running' : 'paused'}`} />
-          <span className="sim-status-label">{isRunning ? 'Live Simulation' : 'Paused'}</span>
+          <span className="sim-status-label">{isRunning ? 'Simulation running' : 'Paused'}</span>
           {isRunning && <span className="sim-elapsed">{elapsedLabel}</span>}
+          {simulate.isError && <span className="sim-fetching" role="alert">Simulation failed. Try Run Simulation again.</span>}
           {simulate.isPending && <span className="sim-fetching">↻ Fetching conditions…</span>}
         </div>
       </div>

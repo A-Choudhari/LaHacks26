@@ -1,18 +1,18 @@
 name: Deploy to Cluster
 
-# Only runs after build-push succeeds on main
+# The cluster and its credentials are managed by the repository owner.
 on:
-  workflow_run:
-    workflows: ["Build & Push Images"]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Successfully built OceanOps image tag"
+        type: string
+        required: true
 
 jobs:
   deploy:
     name: Helm Upgrade
     runs-on: ubuntu-latest
-    # Only deploy on successful upstream build
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout
@@ -47,12 +47,15 @@ jobs:
       #   run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
 
       - name: Deploy with Helm
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           helm upgrade --install oceanops infra/helm/oceanops \
             --namespace oceanops \
             --create-namespace \
             -f infra/helm/oceanops/values.prod.yaml \
-            --set global.imageTag=${{ github.sha }} \
+            --set-string "global.imageTag=$IMAGE_TAG" \
+            --set-string "global.imageRegistry=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" \
             --wait \
             --timeout 5m
 

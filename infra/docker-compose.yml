@@ -1,127 +1,48 @@
-# docker-compose.yml — OceanOps local orchestration
-#
-# USAGE:
-#   cp infra/.env.example infra/.env   # fill in your Mapbox token
-#   docker compose -f infra/docker-compose.yml up --build
-#   docker compose -f infra/docker-compose.yml down -v
-
-version: "3.9"
-
-networks:
-  oceanops:
-    driver: bridge
-
-volumes:
-  ollama_models:   # Persists downloaded Gemma4 model between restarts
-  nats_data:       # JetStream message store persistence
-  mrv_log:         # Append-only MRV audit trail
-
+# Start the sample-data demo with docker compose -f infra/docker-compose.yml up --build
 services:
-
-  # ── NATS JetStream ────────────────────────────────────────────────────────
-  nats:
-    image: nats:2.10-alpine
-    command: ["-c", "/etc/nats/nats.conf"]
-    volumes:
-      - ./nats-server.conf:/etc/nats/nats.conf:ro
-      - nats_data:/data/jetstream
-    ports:
-      - "4222:4222"   # client (nats-py, nats.ws)
-      - "9222:9222"   # WebSocket (browser nats.ws)
-      - "8222:8222"   # monitoring dashboard
-    networks: [oceanops]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    restart: unless-stopped
-
-  # ── Ollama (Gemma4 LLM) ───────────────────────────────────────────────────
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama_models:/root/.ollama
-    ports:
-      - "11434:11434"
-    networks: [oceanops]
-    environment:
-      - OLLAMA_KEEP_ALIVE=24h
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    restart: unless-stopped
-
-  # ── Model pull — runs once then exits ─────────────────────────────────────
-  # Pulls gemma4:e4b into the shared ollama_models volume on first run.
-  # Subsequent runs skip immediately because the model is already on disk.
-  ollama-pull:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama_models:/root/.ollama
-    networks: [oceanops]
-    depends_on:
-      ollama:
-        condition: service_healthy
-    entrypoint: ["ollama", "pull", "gemma4:e4b"]
-    restart: "no"
-
-  # ── Backend (FastAPI) ─────────────────────────────────────────────────────
   backend:
     build:
       context: ..
       dockerfile: infra/docker/backend/Dockerfile
     environment:
-      - NATS_URL=nats://nats:4222
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - USE_MOCK=true
-      - PORT=8000
-    env_file:
-      - ../backend/.env
-    ports:
-      - "8000:8000"
-    volumes:
-      - ../data:/app/data
-      - mrv_log:/app/data/mrv_log
-    networks: [oceanops]
-    depends_on:
-      nats:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
+      OCEANOPS_DEMO: ${OCEANOPS_DEMO:-true}
+      NATS_URL: nats://nats:4222
+      OLLAMA_URL: http://ollama:11434
+      GEMMA_MODEL: ${GEMMA_MODEL:-gemma4:e4b}
+      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
-      interval: 15s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
+      retries: 12
 
-  # ── Frontend (Nginx + Vite build) ─────────────────────────────────────────
   frontend:
     build:
       context: ..
       dockerfile: infra/docker/frontend/Dockerfile
-      args:
-        VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN}
     ports:
-      - "3000:80"
-    networks: [oceanops]
+      - "127.0.0.1:3000:80"
     depends_on:
       backend:
         condition: service_healthy
-    restart: unless-stopped
 
-  # ── Julia (optional — only used when USE_MOCK=false) ──────────────────────
-  julia:
-    build:
-      context: ..
-      dockerfile: infra/docker/julia/Dockerfile
-    profiles: ["julia"]
-    networks: [oceanops]
+  nats:
+    profiles: ["connected"]
+    image: nats:2.10-alpine
+    command: ["-c", "/etc/nats/nats.conf"]
     volumes:
-      - ../data:/julia/data
+      - ../nats-server.conf:/etc/nats/nats.conf:ro
+      - nats_data:/data/jetstream
+    working_dir: /
+    ports:
+      - "127.0.0.1:9222:9222"
+
+  ollama:
+    profiles: ["connected"]
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+
+volumes:
+  nats_data:
+  ollama_models:

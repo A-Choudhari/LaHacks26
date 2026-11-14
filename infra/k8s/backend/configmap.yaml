@@ -9,7 +9,7 @@ metadata:
   namespace: oceanops
 data:
   NATS_URL: "nats://nats:4222"
-  OLLAMA_BASE_URL: "http://ollama:11434"
+  OLLAMA_URL: "http://ollama:11434"
   USE_MOCK: "true"
   # TODO: set to "false" and add julia sidecar when you want live simulations
   PORT: "8000"

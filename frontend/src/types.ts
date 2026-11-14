@@ -4,6 +4,7 @@ export interface SimulationParams {
   vessel: { vessel_speed: number; discharge_rate: number }
   feedstock: { feedstock_type: 'olivine' | 'sodium_hydroxide' }
   ocean: { temperature: number; salinity: number; mixed_layer_depth?: number }
+  use_manual_ocean?: boolean
 }
 
 export interface OptimizeResult {

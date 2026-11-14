@@ -6,6 +6,7 @@ backend/venv/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/.env
+backend/.env.*
 **/*.pyc
 **/*.pyo
 **/*.pyd
@@ -15,7 +16,7 @@ backend/.env
 frontend/node_modules/
 frontend/dist/
 frontend/.env
-frontend/.env.local
+frontend/.env.*
 
 # Data (do NOT bake real data into the image; mount it as a volume)
 data/real/
@@ -27,5 +28,4 @@ data/*.jsonl
 .claude/
 **/.DS_Store
 
-# Infra (no need to bake K8s/Helm files into runtime images)
-infra/
+infra/.env*

@@ -2,18 +2,17 @@
 Plume simulation endpoint.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from config import USE_MOCK
+from config import DEMO_MODE, USE_MOCK
 from agents.geochemist import _compute_viability
 from utils.ocean_physics import (
     fetch_ocean_state,
     generate_plume_from_conditions,
-    load_mock_data,
     run_julia_simulation,
     compute_mrv_hash,
 )
@@ -50,6 +49,7 @@ class SimulationRequest(BaseModel):
     vessel: VesselParams = Field(default_factory=VesselParams)
     feedstock: FeedstockParams = Field(default_factory=FeedstockParams)
     ocean: OceanParams = Field(default_factory=OceanParams)
+    use_manual_ocean: bool = False
 
 
 class SimulationResult(BaseModel):
@@ -70,94 +70,58 @@ class SimulationResult(BaseModel):
 
 @router.post("/simulate", response_model=SimulationResult)
 async def run_simulation(request: SimulationRequest):
-    """
-    Run OAE plume dispersion simulation.
-
-    When Julia is unavailable (USE_MOCK=True), fetches real ocean conditions
-    from NOAA ERDDAP and CalCOFI, then generates a physically-parameterized
-    plume field driven by actual SST, salinity, and mixed-layer depth.
-
-    source values:
-      "live"             — Julia/Oceananigans ran on real GB10 hardware
-      "live-conditions"  — physics-based plume seeded with NOAA/CalCOFI data
-      "mock"             — static fallback (no network, no Julia)
-    """
-    timestamp = datetime.utcnow().isoformat() + "Z"
-
-    # Pacific Guardian deployment position — actual OAE site off Channel Islands
-    SHIP_LAT, SHIP_LON = 33.80, -119.50
-
-    if USE_MOCK:
-        # Try to fetch real ocean conditions, generate physics-based plume
-        ocean_state = None
+    """Run the Julia solver when available, otherwise use the simplified plume model."""
+    timestamp = datetime.now(timezone.utc).isoformat()
+    conditions = None
+    if not DEMO_MODE and not request.use_manual_ocean:
         try:
-            ocean_state = await fetch_ocean_state(SHIP_LAT, SHIP_LON)
-        except Exception:
+            conditions = await fetch_ocean_state(33.80, -119.50)
+        except (OSError, ValueError, KeyError):
             pass
 
-        if ocean_state:
-            data = generate_plume_from_conditions(
-                temperature_c=ocean_state["temperature_c"],
-                salinity_psu=ocean_state["salinity_psu"],
-                mld_m=ocean_state["mixed_layer_depth_m"],
-                baseline_alk=ocean_state["baseline_alkalinity_umol_kg"],
-                vessel_speed=request.vessel.vessel_speed,
-                discharge_rate=request.vessel.discharge_rate,
-                feedstock_type=request.feedstock.feedstock_type,
-            )
-            result = SimulationResult(
-                **data,
-                timestamp=timestamp,
-                source="live-conditions",
-                ocean_state_source=ocean_state["source"],
-                ocean_conditions={
-                    "temperature_c": ocean_state["temperature_c"],
-                    "salinity_psu": ocean_state["salinity_psu"],
-                    "mixed_layer_depth_m": ocean_state["mixed_layer_depth_m"],
-                    "baseline_alkalinity_umol_kg": ocean_state["baseline_alkalinity_umol_kg"],
-                    "fetched_at": ocean_state["fetched_at"],
-                },
-            )
-        else:
-            # Full offline fallback
-            data = load_mock_data()
-            result = SimulationResult(
-                status=data["status"],
-                safety_failures=data["safety_failures"],
-                coordinates=data["coordinates"],
-                fields=data["fields"],
-                summary=data["summary"],
-                params=data["params"],
-                timestamp=timestamp,
-                source="mock",
-                ocean_state_source="mock",
-            )
-    else:
-        # Julia live simulation — pass real ocean conditions as inputs
-        ocean_state = None
+    if conditions is None:
+        source = "manual" if request.use_manual_ocean else "demo"
+        conditions = {
+            "temperature_c": request.ocean.temperature,
+            "salinity_psu": request.ocean.salinity,
+            "mixed_layer_depth_m": request.ocean.mixed_layer_depth,
+            "baseline_alkalinity_umol_kg": 2280.0,
+            "source": source,
+            "fetched_at": timestamp,
+        }
+
+    data = None
+    source = "live"
+    if not USE_MOCK:
+        request.ocean.temperature = conditions["temperature_c"]
+        request.ocean.salinity = conditions["salinity_psu"]
+        request.ocean.mixed_layer_depth = conditions["mixed_layer_depth_m"]
         try:
-            ocean_state = await fetch_ocean_state(SHIP_LAT, SHIP_LON)
-            request.ocean.temperature = ocean_state["temperature_c"]
-            request.ocean.salinity = ocean_state["salinity_psu"]
-            request.ocean.mixed_layer_depth = ocean_state["mixed_layer_depth_m"]
-        except Exception:
+            data = await run_julia_simulation(request)
+        except (HTTPException, OSError, ValueError):
             pass
 
-        data = await run_julia_simulation(request)
-        result = SimulationResult(
-            status=data["status"],
-            safety_failures=data["safety_failures"],
-            coordinates=data["coordinates"],
-            fields=data["fields"],
-            summary=data["summary"],
-            params=data["params"],
-            timestamp=timestamp,
-            source="live",
-            ocean_state_source=ocean_state["source"] if ocean_state else "mock",
-            ocean_conditions=ocean_state,
+    if data is None:
+        data = generate_plume_from_conditions(
+            temperature_c=conditions["temperature_c"],
+            salinity_psu=conditions["salinity_psu"],
+            mld_m=conditions["mixed_layer_depth_m"],
+            baseline_alk=conditions["baseline_alkalinity_umol_kg"],
+            vessel_speed=request.vessel.vessel_speed,
+            discharge_rate=request.vessel.discharge_rate,
+            feedstock_type=request.feedstock.feedstock_type,
         )
+        source = "mock" if conditions["source"] in {"demo", "defaults", "manual"} else "live-conditions"
 
-    result.mrv_hash = compute_mrv_hash(result)
+    result = SimulationResult(
+        **data,
+        timestamp=timestamp,
+        source=source,
+        ocean_state_source=conditions["source"],
+        ocean_conditions=conditions,
+    )
+    if not DEMO_MODE:
+        result.mrv_hash = compute_mrv_hash(result)
 
     # Deterministic viability scoring — zero latency, no LLM in the hot path.
     # Gemma4 enrichment happens in the separate /analyze call the user triggers.

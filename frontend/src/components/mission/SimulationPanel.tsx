@@ -7,6 +7,7 @@ import type { SimulationParams, SimulationResult } from '../../types'
 interface SimulationPanelProps {
   onRun: (p: SimulationParams) => void
   isLoading: boolean
+  demoMode?: boolean
   result?: SimulationResult
   isRunning?: boolean
   elapsedLabel?: string
@@ -16,7 +17,9 @@ interface SimulationPanelProps {
 
 function sourceLabel(src: string): string {
   if (src.includes('noaa_erddap')) return 'NOAA ERDDAP + CalCOFI'
-  if (src === 'calcofi') return 'CalCOFI stations'
+  if (src === 'calcofi') return 'Bundled CalCOFI station data'
+  if (src === 'manual') return 'Manual inputs'
+  if (src === 'demo') return 'Sample ocean conditions'
   return 'offline defaults'
 }
 
@@ -26,7 +29,7 @@ function sourceBadgeClass(src: string): string {
   return 'badge-mock'
 }
 
-export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLabel, onToggleRunning, onReset }: SimulationPanelProps) {
+export function SimulationPanel({ onRun, isLoading, demoMode, result, isRunning, elapsedLabel, onToggleRunning, onReset }: SimulationPanelProps) {
   const [vesselSpeed, setVesselSpeed] = useState(5.0)
   const [dischargeRate, setDischargeRate] = useState(0.5)
   const [feedstock, setFeedstock] = useState<'olivine' | 'sodium_hydroxide'>('olivine')
@@ -42,6 +45,7 @@ export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLa
     onRun({
       vessel: { vessel_speed: vesselSpeed, discharge_rate: dischargeRate },
       feedstock: { feedstock_type: feedstock },
+      use_manual_ocean: useManualOcean,
       ocean: useManualOcean
         ? { temperature, salinity, mixed_layer_depth: mld }
         : { temperature: 15.0, salinity: 35.0 },
@@ -95,7 +99,7 @@ export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLa
                   className={`ocean-mode-btn ${!useManualOcean ? 'active' : ''}`}
                   onClick={() => setUseManualOcean(false)}
                 >
-                  Live NOAA
+                  {demoMode ? 'Sample' : 'Automatic'}
                 </button>
                 <button
                   className={`ocean-mode-btn ${useManualOcean ? 'active' : ''}`}
@@ -198,10 +202,10 @@ export function SimulationPanel({ onRun, isLoading, result, isRunning, elapsedLa
             <div className="result-header">
               <div className={`result-dot ${result.status}`} />
               <span className={`result-title ${result.status}`}>
-                {result.status === 'safe' ? 'Deployment Safe' : 'Threshold Exceeded'}
+                {result.status === 'safe' ? 'Below model thresholds' : 'Threshold Exceeded'}
               </span>
               <span className={`source-badge ${sourceBadgeClass(result.source)}`}>
-                {result.source}
+                {{ mock: 'Sample model', 'live-conditions': 'Ocean data model', live: 'Julia solver' }[result.source]}
               </span>
             </div>
 

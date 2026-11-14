@@ -2,7 +2,7 @@ import { useState, Component, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import 'mapbox-gl/dist/mapbox-gl.css'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 import { API_URL } from './constants'
 import type { AppMode, ShipStatus } from './types'
@@ -16,16 +16,14 @@ import { NatsProvider, useNatsContext } from './context/NatsContext'
 import { useNatsSubscription } from './hooks/useNatsSubscription'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null }
+  state: { error: Error | null } = { error: null }
   static getDerivedStateFromError(error: Error) { return { error } }
+  componentDidCatch(error: Error) { console.error(error) }
   render() {
     if (this.state.error) {
-      const err = this.state.error as Error
       return (
         <div style={{ padding: 32, color: '#f87171', fontFamily: 'monospace', fontSize: 13, background: '#0c0f14', height: '100%', overflow: 'auto' }}>
-          <div style={{ marginBottom: 8, color: '#dde3ea', fontWeight: 700 }}>Runtime Error (check console for full trace)</div>
-          <div style={{ color: '#f87171' }}>{err.message}</div>
-          <pre style={{ marginTop: 12, color: '#6b7a8d', fontSize: 11, whiteSpace: 'pre-wrap' }}>{err.stack}</pre>
+          <div role="alert">This view could not load. Switch tabs or reload to try again.</div>
         </div>
       )
     }
@@ -42,6 +40,7 @@ interface HealthData {
   ollama_available: boolean
   ais_live?: boolean
   ais_vessels?: number
+  demo_mode?: boolean
   latency: number
 }
 
@@ -94,7 +93,6 @@ function AppContent() {
     isConnected: natsConnected,
     isEnabled: natsEnabled,
     isReconnecting: natsReconnecting,
-    bufferedEventCount,
   } = useNatsContext()
 
   // Track last HTTP latency for display
@@ -134,7 +132,7 @@ function AppContent() {
   const { data: traffic } = useQuery<any[]>({
     queryKey: ['traffic'],
     queryFn: () => fetch(`${API_URL}/traffic`).then(r => r.json()),
-    refetchInterval: natsConnected ? false : 30000, // Disable polling when NATS active
+    refetchInterval: 30000, // Keep the HTTP fallback when live AIS has no new messages
     staleTime: 20000,
     retry: 1,
   })
@@ -227,8 +225,8 @@ function AppContent() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4, duration: 0.4 }}
         >
-          <div className="online-dot" />
-          <span>Online</span>
+          <div className={health ? "online-dot" : "online-dot pending"} />
+          <span>{health?.demo_mode ? 'Sample data' : health ? 'Connected' : 'Connecting…'}</span>
           <AnimatePresence>
             {health && (
               <motion.div
@@ -243,19 +241,21 @@ function AppContent() {
                     {natsReconnecting ? (
                       <>
                         <span className="nats-reconnect-spinner" />
-                        {bufferedEventCount > 0 ? `(${bufferedEventCount})` : 'Reconnecting...'}
+                        Reconnecting…
                       </>
                     ) : (
                       <>NATS {natsConnected ? '✓' : '✗'}</>
                     )}
                   </div>
                 )}
-                <div className={`header-chip ${health.ollama_available ? 'chip-ok' : 'chip-off'}`}>
-                  Gemma {health.ollama_available ? '✓' : '✗'}
-                </div>
-                <div className={`header-chip ${health.julia_available ? 'chip-ok' : 'chip-off'}`}>
-                  GPU {health.julia_available ? '✓' : '✗'}
-                </div>
+                {!health.demo_mode && (<>
+                  <div className={`header-chip ${health.ollama_available ? 'chip-ok' : 'chip-off'}`}>
+                    Gemma {health.ollama_available ? '✓' : '✗'}
+                  </div>
+                  <div className={`header-chip ${health.julia_available ? 'chip-ok' : 'chip-off'}`}>
+                    Julia {health.julia_available ? '✓' : '✗'}
+                  </div>
+                </>)}
               </motion.div>
             )}
           </AnimatePresence>
@@ -280,9 +280,9 @@ function AppContent() {
       </motion.header>
 
       <main>
-        <ErrorBoundary>
+        <ErrorBoundary key={mode}>
           {mode === 'global'  && <GlobalIntelligence fleet={fleet} traffic={traffic} />}
-          {mode === 'mission' && <MissionControl fleet={fleet} fleetLoading={fleetLoading} traffic={traffic} />}
+          {mode === 'mission' && <MissionControl fleet={fleet} fleetLoading={fleetLoading} traffic={traffic} demoMode={health?.demo_mode} />}
           {mode === 'route'   && <RoutePlanning fleet={fleet} traffic={traffic} />}
         </ErrorBoundary>
       </main>

@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 import ais_stream
-from config import MOCK_DATA_DIR, REAL_DATA_DIR
+from config import DEMO_MODE, MOCK_DATA_DIR, REAL_DATA_DIR
 
 router = APIRouter()
 
@@ -32,7 +32,10 @@ _vessel_state: dict = {"vessels": [], "last_update": 0.0}
 
 def _load_base_vessels() -> list[dict]:
     """Load real AIS vessel data (curated from NOAA AIS 2024-01-01, CA coastal waters)."""
-    for ais_file in [REAL_DATA_DIR / "ais_vessels.json", MOCK_DATA_DIR / "ais_vessels.json"]:
+    paths = [MOCK_DATA_DIR / "ais_vessels.json"]
+    if not DEMO_MODE:
+        paths.insert(0, REAL_DATA_DIR / "ais_vessels.json")
+    for ais_file in paths:
         if ais_file.exists():
             with open(ais_file) as f:
                 return json.load(f)
@@ -72,7 +75,7 @@ async def get_vessel_traffic():
                    with simulated position updates based on heading/speed.
     """
     # Prefer live AIS stream
-    live = ais_stream.get_vessels()
+    live = [] if DEMO_MODE else ais_stream.get_vessels()
     if live:
         return [VesselTraffic(**{k: v for k, v in vessel.items()
                                  if k in VesselTraffic.model_fields})

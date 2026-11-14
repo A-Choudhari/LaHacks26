@@ -5,10 +5,10 @@ Subject: health.backend
 
 import asyncio
 import logging
-import subprocess
 
 from nats_client import get_nats
-from config import JULIA_SCRIPT, JULIA_INSTALLED, MOCK_DATA_DIR
+from config import MOCK_DATA_DIR, USE_MOCK
+from agents.base import is_ollama_available
 import ais_stream
 
 logger = logging.getLogger(__name__)
@@ -43,18 +43,6 @@ class HealthPublisher:
                 pass
         logger.info("Health publisher stopped")
 
-    def _check_ollama(self) -> bool:
-        """Check if Ollama is available."""
-        try:
-            result = subprocess.run(
-                ["curl", "-s", "http://localhost:11434/api/tags"],
-                capture_output=True,
-                timeout=1,
-            )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
-
     async def _publish_loop(self):
         """Main publish loop - runs every PUBLISH_INTERVAL_S."""
         nats = get_nats()
@@ -62,9 +50,9 @@ class HealthPublisher:
         while self._running:
             try:
                 # Gather health data
-                julia_ok = JULIA_SCRIPT.exists() and JULIA_INSTALLED
+                julia_ok = not USE_MOCK
                 mock_ok = MOCK_DATA_DIR.exists() and any(MOCK_DATA_DIR.glob("*.json"))
-                ollama_ok = self._check_ollama()
+                ollama_ok = await is_ollama_available()
 
                 health_data = {
                     "status": "ok",

@@ -12,7 +12,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from config import PROJECT_ROOT, MOCK_DATA_DIR, JULIA_SCRIPT
+from config import DEMO_MODE, PROJECT_ROOT, MOCK_DATA_DIR, JULIA_SCRIPT
 
 
 # In-memory cache for NOAA ERDDAP ocean-state responses (10-minute TTL)
@@ -48,20 +48,21 @@ async def fetch_ocean_state(lat: float, lon: float) -> dict:
     # URL: griddap query for a 0.04° box around the deployment point.
     erddap_url = (
         "https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json"
-        f"?analysed_sst[(last)][({lat - 0.02:.4f}):({lat + 0.02:.4f})][({lon - 0.02:.4f}):({lon + 0.02:.4f})]"
+        f"?analysed_sst[(last)][({lat - 0.02:.4f}):({lat + 0.02:.4f})]"
+        f"[({lon - 0.02:.4f}):({lon + 0.02:.4f})]"
     )
-    try:
-        async with httpx.AsyncClient(timeout=3.5) as client:
-            resp = await client.get(erddap_url)
-        if resp.status_code == 200:
-            rows = resp.json().get("table", {}).get("rows", [])
-            if rows:
+    if not DEMO_MODE:
+        try:
+            async with httpx.AsyncClient(timeout=3.5) as client:
+                resp = await client.get(erddap_url)
+            if resp.status_code == 200:
+                rows = resp.json().get("table", {}).get("rows", [])
                 sst_values = [r[3] for r in rows if r[3] is not None]
                 if sst_values:
                     temperature_c = round(sum(sst_values) / len(sst_values), 2)
                     sst_source = "noaa_erddap"
-    except Exception:
-        pass  # network unavailable — fall through to CalCOFI
+        except (httpx.HTTPError, ValueError, IndexError):
+            pass  # Fall back to the bundled station data.
 
     # ── 2. CalCOFI nearest station: salinity, MLD, alkalinity ────────────────
     salinity_psu = 35.0
@@ -89,10 +90,8 @@ async def fetch_ocean_state(lat: float, lon: float) -> dict:
         temperature_c = 15.0
         sst_source = "defaults"
 
-    combined_source = (
-        f"{sst_source}+{calcofi_source}" if sst_source != calcofi_source
-        else sst_source
-    )
+    sources = [sst_source, calcofi_source]
+    combined_source = "+".join(dict.fromkeys(sources))
 
     result = {
         "lat": lat,

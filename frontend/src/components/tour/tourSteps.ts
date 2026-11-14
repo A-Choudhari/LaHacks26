@@ -13,7 +13,7 @@ export const GLOBAL_TOUR: TourStep[] = [
   {
     target: 'gi-zones',
     title: 'OAE Deployment Zones',
-    body: 'Three candidate zones scored using real NOAA ocean data. Each card shows a <b>suitability score</b> based on sea surface temperature, chlorophyll concentration, and mixing dynamics. Click a zone card to open its impact analysis with 50-year CO₂ projections.',
+    body: 'Explore the example regions and any available ocean-data overlays. Each card shows a <b>suitability score</b> based on sea surface temperature, chlorophyll concentration, and mixing dynamics. Click a zone card to open its impact analysis with 50-year CO₂ projections.',
     pos: 'right',
   },
   {
@@ -25,13 +25,13 @@ export const GLOBAL_TOUR: TourStep[] = [
   {
     target: 'gi-discover',
     title: 'AI-Powered Site Discovery',
-    body: 'Click <b>Discover Optimal Zones</b> to run the local Gemma 4 Spatial Intelligence Agent. It evaluates 8 candidate CalCOFI stations, checks MPA conflicts, mixed layer depth, temperature and salinity, then returns the top 5 scientifically-viable deployment sites — all running offline on your machine.',
+    body: 'Click <b>Discover Optimal Zones</b> to rank candidate sites using bundled ocean conditions and simplified protected-area checks. Gemma 4 can add context when a local model is configured.',
     pos: 'right',
   },
   {
     target: 'gi-map',
     title: 'Interactive Ocean Map',
-    body: 'The globe shows OAE deployment zones as glowing blobs, CalCOFI sampling stations as teal circles, and Marine Protected Areas in red — where deployment is legally restricted. <b>Click any zone</b> to open a full impact panel with revenue projections, ocean chemistry, and a safety assessment.',
+    body: 'The map shows OAE deployment zones as glowing blobs, CalCOFI sampling stations as teal circles, and Marine Protected Areas in red — shown as approximate boundaries in demo mode. <b>Click any zone</b> to open a full impact panel with revenue projections, ocean chemistry, and a safety assessment.',
     pos: 'left',
   },
 ]
@@ -39,7 +39,7 @@ export const GLOBAL_TOUR: TourStep[] = [
 export const MISSION_TOUR: TourStep[] = [
   {
     title: 'Welcome to Mission Control',
-    body: 'Mission Control runs a <b>physics-based plume simulation</b> of your OAE fleet in real-time. It uses live sea surface temperature from NOAA ERDDAP and real CalCOFI ocean conditions. Every result is cryptographically hashed for <b>MRV</b> (Measurement, Reporting, Verification) — the foundation of carbon credit integrity.',
+    body: 'Mission Control shows how a simulated alkalinity plume changes as you adjust a vessel or its discharge. Try a new scenario and compare the estimated alkalinity and aragonite saturation.',
   },
   {
     target: 'mc-sim-panel',
@@ -49,26 +49,20 @@ export const MISSION_TOUR: TourStep[] = [
   },
   {
     target: 'mc-sim-controls',
-    title: 'Live Simulation Controls',
+    title: 'Simulation Controls',
     body: 'Ships advance every <b>1.5 seconds</b> and ocean conditions refresh every <b>45 seconds</b>. Use Pause to freeze, Resume to continue, and Reset to return ships to start. The pulsing dot turns amber when paused. Elapsed time tracks your deployment duration.',
     pos: 'right',
   },
   {
     target: 'mc-ai-panel',
-    title: 'Gemma 4 Safety Analysis',
-    body: 'After each simulation, the local <b>Geochemist Agent</b> evaluates two critical OAE thresholds: <b>Ω_aragonite &lt; 30.0</b> (above triggers runaway carbonate precipitation) and <b>total alkalinity &lt; 3500 µmol/kg</b> (above risks olivine toxicity). Recommendations are generated entirely offline by Gemma 4.',
-    pos: 'right',
-  },
-  {
-    target: 'mc-viz-3d',
-    title: '3D Plume Visualization',
-    body: 'Switch to <b>3D View</b> to see the alkalinity isosurface bounding box hovering above the Pacific Guardian\'s deployment site. The <b>Section Depth</b> slider cuts a horizontal cross-section through the plume, color-coded blue→orange for alkalinity concentration. Velocity arrows show ocean current direction.',
+    title: 'Model Thresholds and Analysis',
+    body: 'After each simulation, the local <b>Geochemist Agent</b> evaluates two critical OAE thresholds: <b>Ω_aragonite &lt; 30.0</b> (above triggers runaway carbonate precipitation) and <b>total alkalinity &lt; 3500 µmol/kg</b> (above risks olivine toxicity). The demo uses rules. A configured local Gemma model can add an explanation.',
     pos: 'right',
   },
   {
     target: 'mc-map',
     title: 'Alkalinity Plume Heatmap',
-    body: 'The heatmap shows the 2D surface projection of alkalinity concentration — it follows your active ship in real-time. Brighter cyan indicates higher alkalinity enhancement, where CO₂ absorption is occurring. The plume shape reflects real mixed layer depth, vessel speed, and olivine dissolution rate.',
+    body: 'The heatmap shows the 2D surface projection of alkalinity concentration — it follows your active ship in real-time. Brighter colors indicate higher modeled alkalinity. The simplified plume responds to mixed layer depth, vessel speed, discharge rate, and feedstock.',
     pos: 'left',
   },
   {
@@ -88,17 +82,17 @@ export const MISSION_TOUR: TourStep[] = [
 export const ROUTE_TOUR: TourStep[] = [
   {
     title: 'Welcome to Route Planning',
-    body: 'Route Planning optimizes how your fleet reaches the highest-impact OAE deployment zones. Choose <b>AI Fleet</b> to let the Spatial Intelligence Agent automatically assign each vessel the nearest high-scoring site, or <b>Manual</b> to click waypoints on the map and build a custom route.',
+    body: 'Route Planning optimizes how your fleet reaches the highest-impact OAE deployment zones. Choose <b>Fleet routes</b> to let the Spatial Intelligence Agent automatically assign each vessel the nearest high-scoring site, or <b>Manual</b> to click waypoints on the map and build a custom route.',
   },
   {
     target: 'rp-tabs',
     title: 'Two Routing Modes',
-    body: '<b>AI Fleet</b> calls the Spatial Intelligence Agent — it fetches real NOAA data, scores 8 candidate sites for MPA proximity, mixed layer depth, and water chemistry, then uses a greedy nearest-neighbor algorithm (benchmarked at 1.054× optimal) to assign routes across your 3 ships. <b>Manual</b> gives you click-to-place waypoints with live CO₂ estimates per segment.',
+    body: '<b>Fleet routes</b> calls the Spatial Intelligence Agent — it fetches real NOAA data, scores 8 candidate sites for MPA proximity, mixed layer depth, and water chemistry, then uses a greedy nearest-neighbor algorithm (benchmarked at 1.054× optimal) to assign routes across your 3 ships. <b>Manual</b> gives you click-to-place waypoints with live CO₂ estimates per segment.',
     pos: 'right',
   },
   {
     target: 'rp-compute',
-    title: 'Compute Optimal Routes',
+    title: 'Compute Fleet Routes',
     body: 'Clicking this fires the <b>Spatial Intelligence Agent</b> against all candidate sites. It returns top-5 zones by suitability score, filters out MPA conflicts, and assigns ships via nearest-neighbor. Each ship gets a color-coded dashed route on the map. Fleet assignment runs at <b>0.18ms per call</b>.',
     pos: 'right',
   },

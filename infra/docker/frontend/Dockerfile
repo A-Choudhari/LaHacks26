@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────
 # Stage 1: Node build (Vite + TypeScript compile)
 # ─────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /build
 
@@ -13,18 +13,12 @@ RUN npm ci --prefer-offline
 # Copy source files
 COPY frontend/ .
 
-# VITE_MAPBOX_TOKEN is a build-time ARG: Vite bakes it into the JS bundle at
-# build time, so it cannot be injected at runtime via env vars.
-# Passed as --build-arg in CI and in docker-compose build.args.
-ARG VITE_MAPBOX_TOKEN
-ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
-
 RUN npm run build
 
 # ─────────────────────────────────────────────────────
 # Stage 2: Nginx static file server
 # ─────────────────────────────────────────────────────
-FROM nginx:1.25-alpine AS runtime
+FROM nginx:stable-alpine AS runtime
 
 # Drop default nginx config, replace with ours
 RUN rm /etc/nginx/conf.d/default.conf

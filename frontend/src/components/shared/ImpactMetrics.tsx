@@ -43,7 +43,7 @@ export function ImpactMetrics({ result, fleet }: ImpactMetricsProps) {
     <div className="impact-overlay">
       <div className="impact-chip">
         <div className="impact-val">{co2Display}</div>
-        <div className="impact-lbl">Fleet CO₂ Removed</div>
+        <div className="impact-lbl">Sample fleet CO₂</div>
       </div>
       <AnimatePresence>
         {result && (
