@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import Map, { Source, Layer, Marker, MapRef } from 'react-map-gl'
-import { useRef } from 'react'
+import Map, { Source, Layer, Marker } from 'react-map-gl/maplibre'
 import { motion, AnimatePresence } from 'framer-motion'
-import { API_URL, MAPBOX_TOKEN, OAE_ZONES, fadeUp, staggerList } from '../constants'
+import { API_URL, MAP_STYLE, OAE_ZONES, fadeUp, staggerList } from '../constants'
 import type { CalCOFIStation, DiscoveryZone, HotspotImpact, ShipStatus, GlobalHotspot } from '../types'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
 import { useMPAData } from '../hooks/useMPAData'
@@ -35,8 +34,6 @@ const TIER_COLOR: Record<string, string> = {
 }
 
 export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) {
-  const mapRef = useRef<MapRef>(null)
-
   const { data: mpaData } = useMPAData()
 
   const { data: stations } = useQuery<CalCOFIStation[]>({
@@ -56,18 +53,6 @@ export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) 
   const [discoveryZones, setDiscoveryZones] = useState<DiscoveryZone[]>([])
   const [isDiscovering, setIsDiscovering] = useState(false)
 
-  // Set globe atmosphere on map load
-  const handleMapLoad = useCallback(() => {
-    const map = mapRef.current?.getMap()
-    if (!map) return
-    map.setFog({
-      color: 'rgba(10, 15, 25, 0.6)',
-      'high-color': '#0d2137',
-      'horizon-blend': 0.04,
-      'space-color': '#07101d',
-      'star-intensity': 0.5,
-    } as any)
-  }, [])
   const [impactData, setImpactData] = useState<Record<number, HotspotImpact>>({})
   const [impactLoading, setImpactLoading] = useState<Set<number>>(new Set())
   const [selectedDiscIdx, setSelectedDiscIdx] = useState<number | null>(null)
@@ -278,14 +263,10 @@ export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) 
       {/* ── Map ── */}
       <div className="map-container" data-tour="gi-map">
         <Map
-          ref={mapRef}
           initialViewState={{ longitude: -110, latitude: 20, zoom: 1.8 }}
           style={{ width: '100%', height: '100%' }}
-          mapStyle="mapbox://styles/mapbox/dark-v11"
-          mapboxAccessToken={MAPBOX_TOKEN}
-          projection={{ name: 'globe' }}
+          mapStyle={MAP_STYLE}
           reuseMaps
-          onLoad={handleMapLoad}
           interactiveLayerIds={['oae-fill']}
           onClick={e => {
             // Only update selection when clicking a named zone feature on the map
@@ -485,7 +466,7 @@ export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) 
             <svg width="8" height="12" viewBox="0 0 14 20" fill="none" style={{ flexShrink: 0 }}>
               <path d="M7 1C4.8 1 3.5 3 3.5 5.5L3.5 15.5C3.5 17.5 5 19 7 19C9 19 10.5 17.5 10.5 15.5L10.5 5.5C10.5 3 9.2 1 7 1Z" fill="#f59e0b"/>
             </svg>
-            <span>Live AIS vessel</span>
+            <span>AIS vessel</span>
           </div>
           <div className="legend-row">
             <svg width="8" height="12" viewBox="0 0 14 20" fill="none" style={{ flexShrink: 0 }}>
@@ -495,7 +476,7 @@ export function GlobalIntelligence({ fleet, traffic }: GlobalIntelligenceProps) 
           </div>
           {traffic?.length ? (
             <div className="legend-row" style={{ marginTop: 2 }}>
-              <span style={{ color: 'var(--text-3)', fontSize: 9 }}>{traffic.length.toLocaleString()} vessels live</span>
+              <span style={{ color: 'var(--text-3)', fontSize: 9 }}>{traffic.length.toLocaleString()} vessels shown</span>
             </div>
           ) : null}
           <div className="legend-rule" />

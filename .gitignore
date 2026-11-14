@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -135,6 +135,7 @@ celerybeat.pid
 *.rdb
 *.aof
 *.pid
+.pids
 
 # RabbitMQ
 mnesia/
@@ -151,7 +152,6 @@ activemq-data/
 .env
 .env.local
 frontend/.env
-frontend/.env.example
 .envrc
 .venv
 env/
@@ -247,3 +247,4 @@ data/*
 # Data
 data/real/
 data/mrv_log.jsonl
+.vercel

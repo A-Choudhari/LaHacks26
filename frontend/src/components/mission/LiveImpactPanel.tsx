@@ -187,13 +187,13 @@ export function LiveImpactPanel({ result, fleet, history = [] }: LiveImpactPanel
 
   return (
     <div className="panel" style={{ flex: 1 }}>
-      <div className="panel-label">Live Impact</div>
+      <div className="panel-label">Estimated Impact</div>
 
       {/* Fleet summary chips */}
       <div className="impact-fleet-row">
         <div className="impact-fleet-chip">
           <span className="ifc-val">{totalCO2.toFixed(0)}</span>
-          <span className="ifc-lbl">Fleet CO₂ (t)</span>
+          <span className="ifc-lbl">Sample Fleet CO₂ (t)</span>
         </div>
         <div className="impact-fleet-chip">
           <span className="ifc-val deploy">{deploying}</span>
@@ -215,7 +215,7 @@ export function LiveImpactPanel({ result, fleet, history = [] }: LiveImpactPanel
           >
             {/* AI viability assessment — primary signal */}
             <div className="impact-section-head">
-              AI Viability Assessment
+              Model Viability Assessment
               {result.mrv_hash && (
                 <span className="impact-mrv-tag">✓ MRV:{result.mrv_hash.slice(0, 6)}</span>
               )}
@@ -300,7 +300,7 @@ export function LiveImpactPanel({ result, fleet, history = [] }: LiveImpactPanel
             {/* Ocean conditions */}
             {result.ocean_conditions && (
               <div className="impact-ocean-block">
-                <div className="impact-section-head">Live Ocean State</div>
+                <div className="impact-section-head">Ocean Conditions</div>
                 <div className="impact-ocean-grid">
                   <div className="iog-item">
                     <span className="iog-val">{result.ocean_conditions.temperature_c.toFixed(1)}°C</span>

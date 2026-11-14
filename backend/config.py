@@ -9,6 +9,12 @@ from pathlib import Path
 # NATS configuration
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 
+def enabled(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes"}
+
+
+DEMO_MODE = enabled("OCEANOPS_DEMO")
+
 # Paths
 PROJECT_ROOT = Path(__file__).parent.parent
 JULIA_SCRIPT = PROJECT_ROOT / "julia" / "plume_simulator.jl"
@@ -25,8 +31,8 @@ def is_julia_available() -> bool:
         return False
 
 
-JULIA_INSTALLED = is_julia_available()
-USE_MOCK = not JULIA_SCRIPT.exists() or not JULIA_INSTALLED
+JULIA_INSTALLED = not DEMO_MODE and is_julia_available()
+USE_MOCK = DEMO_MODE or enabled("USE_MOCK") or not JULIA_SCRIPT.exists() or not JULIA_INSTALLED
 
 # CORS origins
 CORS_ORIGINS = [

@@ -2,12 +2,9 @@
 AI analysis and agent dispatch endpoints.
 """
 
-import asyncio
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from config import SAFETY_PROMPT, CO2_PROMPT
 from agents import get_spatial_agent, get_geochemist_agent
 
 router = APIRouter()
@@ -26,31 +23,6 @@ class AnalysisResponse(BaseModel):
     recommendations: list[str]
     confidence: float
     model_used: str
-
-
-async def query_ollama(prompt: str, model: str = "gemma4:31b") -> str:
-    """Query Ollama API with a prompt"""
-    import httpx
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.3,
-                        "num_predict": 300
-                    }
-                }
-            )
-            if response.status_code == 200:
-                return response.json().get("response", "")
-            return f"Ollama error: {response.status_code}"
-    except Exception as e:
-        return f"Ollama unavailable: {str(e)}"
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
@@ -88,49 +60,7 @@ async def analyze_simulation(request: AnalysisRequest):
             model_used=result.get("model_used", "geochemist-agent"),
         )
     except Exception:
-        pass  # fall through to direct Ollama
-
-    # Direct Ollama / Gemma4 fallback
-    ollama_available = False
-    try:
-        import httpx
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get("http://localhost:11434/api/tags")
-            ollama_available = resp.status_code == 200
-    except Exception:
-        pass
-
-    if ollama_available:
-        safety_prompt = SAFETY_PROMPT.format(
-            max_aragonite=max_aragonite,
-            max_alkalinity=max_alkalinity,
-            feedstock_type=feedstock,
-            temperature=temp,
-            discharge_rate=params.get("discharge_rate", 0.1),
-        )
-        co2_prompt = CO2_PROMPT.format(
-            alkalinity_deployed=max_alkalinity,
-            temperature=temp,
-            area=25,
-        )
-        safety_text, co2_text = await asyncio.gather(
-            query_ollama(safety_prompt),
-            query_ollama(co2_prompt),
-        )
-        recommendations = []
-        if max_aragonite > 25:
-            recommendations.append("Consider reducing discharge rate to lower aragonite saturation")
-        if max_alkalinity > 3200:
-            recommendations.append("Monitor for olivine toxicity effects on marine life")
-        if not recommendations:
-            recommendations.append("Deployment parameters are within optimal ranges")
-        return AnalysisResponse(
-            safety_assessment=safety_text,
-            co2_projection=co2_text,
-            recommendations=recommendations,
-            confidence=0.85,
-            model_used="gemma4:31b",
-        )
+        pass  # fall through to deterministic analysis
 
     # Pure rule-based fallback
     from agents.geochemist import (

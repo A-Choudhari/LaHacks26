@@ -14,15 +14,17 @@ try:
 except ImportError:
     _HTTPX_AVAILABLE = False
 
+from config import DEMO_MODE
+
 logger = logging.getLogger(__name__)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-GEMMA_MODEL = os.getenv("GEMMA_MODEL", "gemma4:31b")
+GEMMA_MODEL = os.getenv("GEMMA_MODEL", "gemma4:e4b")
 
 
 async def is_ollama_available() -> bool:
     """Check if Ollama is running and the Gemma4 model is loaded."""
-    if not _HTTPX_AVAILABLE:
+    if DEMO_MODE or not _HTTPX_AVAILABLE:
         return False
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
@@ -30,7 +32,7 @@ async def is_ollama_available() -> bool:
             if resp.status_code != 200:
                 return False
             tags = resp.json().get("models", [])
-            return any(GEMMA_MODEL.split(":")[0] in m.get("name", "") for m in tags)
+            return any(m.get("name") == GEMMA_MODEL for m in tags)
     except Exception:
         return False
 
@@ -40,7 +42,7 @@ async def query_gemma(prompt: str, system: str = "", timeout: float = 45.0, num_
     Send a prompt to local Gemma4 via Ollama and return the response text.
     Raises on connection failure so callers can fall back to rule-based logic.
     """
-    if not _HTTPX_AVAILABLE:
+    if DEMO_MODE or not _HTTPX_AVAILABLE:
         raise RuntimeError("httpx not installed — Ollama unavailable")
     payload = {
         "model": GEMMA_MODEL,

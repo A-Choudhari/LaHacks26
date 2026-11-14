@@ -61,9 +61,6 @@ export function useNatsSubscription<T = unknown>(
       return
     }
 
-    // Ensure connected
-    natsManager.connect()
-
     const handler: MessageHandler<T> = (msg: NATSMessage<T>) => {
       setData(msg.data)
       setTimestamp(msg.ts)

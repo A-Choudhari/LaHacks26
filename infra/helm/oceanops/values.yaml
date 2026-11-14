@@ -22,7 +22,7 @@ backend:
   env:
     USE_MOCK: "true"
     PORT: "8000"
-    # NATS_URL and OLLAMA_BASE_URL are injected by the chart template using
+    # NATS_URL and OLLAMA_URL are injected by the chart template using
     # in-cluster service DNS — do not override here
 
   # TODO (Week 4): configure resource limits after profiling

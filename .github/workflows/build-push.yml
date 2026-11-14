@@ -9,8 +9,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # TODO: set to your GitHub org/username
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/oceanops
 
 jobs:
   build-backend:
@@ -36,6 +34,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Container image name
+        id: image
+        run: echo "name=$REGISTRY/${GITHUB_REPOSITORY_OWNER,,}/oceanops/backend" >> "$GITHUB_OUTPUT"
+
       - name: Build & Push backend
         uses: docker/build-push-action@v5
         with:
@@ -44,8 +46,8 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           # Tag with both git SHA (immutable) and 'latest' (convenience)
           tags: |
-            ${{ env.IMAGE_PREFIX }}/backend:${{ github.sha }}
-            ${{ env.IMAGE_PREFIX }}/backend:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
           # Cache layers in GitHub Actions cache
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -72,6 +74,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Container image name
+        id: image
+        run: echo "name=$REGISTRY/${GITHUB_REPOSITORY_OWNER,,}/oceanops/frontend" >> "$GITHUB_OUTPUT"
+
       - name: Build & Push frontend
         uses: docker/build-push-action@v5
         with:
@@ -79,11 +85,8 @@ jobs:
           file: infra/docker/frontend/Dockerfile
           push: ${{ github.event_name == 'push' }}
           tags: |
-            ${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }}
-            ${{ env.IMAGE_PREFIX }}/frontend:latest
-          # TODO: inject Mapbox token from GitHub Secret
-          build-args: |
-            VITE_MAPBOX_TOKEN=${{ secrets.VITE_MAPBOX_TOKEN }}
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

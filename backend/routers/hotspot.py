@@ -13,10 +13,10 @@ router = APIRouter()
 
 
 class HotspotImpactRequest(BaseModel):
-    lat: float
-    lon: float
-    discharge_rate: float = 0.5
-    vessel_speed: float = 6.0
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    discharge_rate: float = Field(0.5, ge=0.01, le=10)
+    vessel_speed: float = Field(6.0, ge=0.1, le=30)
     feedstock_type: str = Field("olivine", pattern="^(olivine|sodium_hydroxide)$")
     duration_years: int = Field(10, ge=1, le=100)
 

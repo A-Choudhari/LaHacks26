@@ -10,11 +10,14 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
 
+from config import DEMO_MODE, REAL_DATA_DIR
+
 logger = logging.getLogger(__name__)
 
 ERDDAP = "https://coastwatch.pfeg.noaa.gov/erddap"
-DATA_DIR = Path(__file__).parent.parent / "data" / "real"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR = REAL_DATA_DIR
+if not DEMO_MODE:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # CA coastal bounding box
 LAT_MIN, LAT_MAX = 32.0, 38.0

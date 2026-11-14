@@ -8,7 +8,7 @@ load_dotenv()  # loads backend/.env into os.environ before anything else
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +20,7 @@ from data_fetcher import refresh_all
 import ais_stream
 
 # Configuration
-from config import CORS_ORIGINS
+from config import CORS_ORIGINS, DEMO_MODE
 
 # Routers
 from routers import (
@@ -52,53 +52,44 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning(f"Startup cache warmup failed (non-fatal): {exc}")
 
+    if DEMO_MODE:
+        yield
+        return
+
     threading.Thread(target=_warm, daemon=True).start()
 
-    # Start real-time AIS stream in background
-    asyncio.create_task(ais_stream.stream_forever())
+    from nats_client import get_nats, is_nats_available
+    from publishers import HealthPublisher
+    from publishers.fleet_pub import get_fleet_publisher
 
-    # Start NATS connection and publishers
     health_pub = None
     fleet_pub = None
+    nats = get_nats()
+    if await is_nats_available():
+        from nats_config import setup_jetstream_streams, setup_jetstream_consumers
+
+        await setup_jetstream_streams()
+        await setup_jetstream_consumers()
+        health_pub = HealthPublisher()
+        fleet_pub = get_fleet_publisher()
+        await health_pub.start()
+        await fleet_pub.start()
+    else:
+        logger.info("NATS unavailable - using HTTP polling")
+
+    ais_task = asyncio.create_task(ais_stream.stream_forever())
     try:
-        from nats_client import get_nats, is_nats_available
-        from publishers import HealthPublisher, FleetPublisher
-
-        if await is_nats_available():
-            logger.info("NATS connected - starting publishers")
-
-            # Setup JetStream streams for message persistence
-            try:
-                from nats_config import setup_jetstream_streams, setup_jetstream_consumers
-                await setup_jetstream_streams()
-                await setup_jetstream_consumers()
-            except Exception as e:
-                logger.warning(f"JetStream setup failed (non-fatal): {e}")
-
-            health_pub = HealthPublisher()
-            await health_pub.start()
-            fleet_pub = FleetPublisher()
-            await fleet_pub.start()
-        else:
-            logger.info("NATS unavailable - streaming disabled, HTTP fallback active")
-    except ImportError as e:
-        logger.warning(f"NATS modules not available: {e}")
-    except Exception as e:
-        logger.warning(f"NATS startup failed (non-fatal): {e}")
-
-    yield
-
-    # Cleanup NATS on shutdown
-    try:
+        yield
+    finally:
+        ais_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await ais_task
+        await ais_stream.stop_stream()
         if health_pub:
             await health_pub.stop()
         if fleet_pub:
             await fleet_pub.stop()
-        nats = get_nats()
-        if nats.is_connected:
-            await nats.disconnect()
-    except Exception as e:
-        logger.warning(f"NATS shutdown error: {e}")
+        await nats.disconnect()
 
 
 app = FastAPI(

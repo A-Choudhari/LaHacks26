@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import Map, { Source, Layer, Marker } from 'react-map-gl'
+import Map, { Source, Layer, Marker } from 'react-map-gl/maplibre'
 import { motion, AnimatePresence } from 'framer-motion'
-import { API_URL, MAPBOX_TOKEN, fadeUp, staggerList } from '../constants'
+import { API_URL, MAP_STYLE, MPA_DATA, fadeUp, staggerList } from '../constants'
 import type { ShipStatus, DiscoveryZone } from '../types'
 import { MPAOverlay } from '../components/shared/MPAOverlay'
 import { useMPAData } from '../hooks/useMPAData'
@@ -214,6 +214,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
   const [hotspots, setHotspots] = useState<DiscoveryZone[]>([])
   const [isDiscovering, setIsDiscovering] = useState(false)
   const [routesComputed, setRoutesComputed] = useState(false)
+  const [routeError, setRouteError] = useState(false)
 
   // Local ship position overrides (set when user drags a ship)
   const [localPositions, setLocalPositions] = useState<LocalPositions>({})
@@ -249,6 +250,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
 
   const computeRoutes = async () => {
     setIsDiscovering(true)
+    setRouteError(false)
     setRoutesComputed(false)
     setHotspots([])
     setAgentRoutes(null)
@@ -306,7 +308,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
       }
     } catch (e) {
       console.error('route discovery stream failed', e)
-      setRoutesComputed(true)
+      setRouteError(true)
     } finally {
       setIsDiscovering(false)
     }
@@ -327,7 +329,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
   }
 
   // MPA conflict check for each manual segment
-  const mpaFeatures = useMemo(() => mpaData?.features ?? [], [mpaData])
+  const mpaFeatures = useMemo(() => mpaData?.features?.length ? mpaData.features : MPA_DATA.features, [mpaData])
 
   const segmentConflicts = useMemo<(string | null)[]>(() => {
     if (manualWaypoints.length < 2 || mpaFeatures.length === 0) return []
@@ -407,7 +409,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
               className={`rp-tab-btn${tab === 'fleet' ? ' active' : ''}`}
               onClick={() => setTab('fleet')}
             >
-              AI Fleet
+              Fleet routes
             </button>
             <button
               className={`rp-tab-btn${tab === 'manual' ? ' active' : ''}`}
@@ -442,15 +444,17 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
                       Analyzing ocean conditions…
                     </>
                   ) : routesComputed ? (
-                    '↻ Recompute Optimal Routes'
+                    '↻ Recompute Routes'
                   ) : (
-                    '◈ Compute Optimal Routes'
+                    '◈ Compute Fleet Routes'
                   )}
                 </motion.button>
 
+                {routeError && <p className="rp-hint" role="alert">Route calculation failed. Try again.</p>}
+
                 {/* No data yet */}
                 <AnimatePresence>
-                  {!routesComputed && !isDiscovering && (
+                  {!routesComputed && !isDiscovering && !routeError && (
                     <motion.div
                       className="rp-hint"
                       initial={{ opacity: 0, y: 6 }}
@@ -462,7 +466,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
                       <div>
                         <div className="rp-hint-title">AI-powered routing</div>
                         <div className="rp-hint-sub">
-                          Analyzes CalCOFI & NOAA data to find optimal OAE deployment sites, then assigns each vessel the nearest high-impact hotspot.
+                          Ranks candidate sites and connects them to a sample fleet.
                         </div>
                       </div>
                     </motion.div>
@@ -516,12 +520,12 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
 
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: 5,
-                        fontSize: 10, color: 'var(--success)',
-                        background: 'rgba(74,222,128,0.07)',
-                        border: '1px solid rgba(74,222,128,0.2)',
+                        fontSize: 10, color: 'var(--text-2)',
+                        background: 'rgba(34,211,238,0.05)',
+                        border: '1px solid rgba(34,211,238,0.16)',
                         borderRadius: 6, padding: '5px 10px', marginTop: 8,
                       }}>
-                        <span>✓</span><span>MPA-Safe — detours computed for all conflicts</span>
+                        <span>Review example routes against the protected-area overlay.</span>
                       </div>
 
                       <div className="gi-divider" style={{ margin: '14px 0' }} />
@@ -722,8 +726,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
         <Map
           initialViewState={{ longitude: -119.8, latitude: 33.8, zoom: 7 }}
           style={{ width: '100%', height: '100%' }}
-          mapStyle="mapbox://styles/mapbox/dark-v11"
-          mapboxAccessToken={MAPBOX_TOKEN}
+          mapStyle={MAP_STYLE}
           reuseMaps
           onClick={
             tab === 'manual'
@@ -929,7 +932,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
           </div>
           {traffic && (
             <div className="legend-row" style={{ marginTop: 4 }}>
-              <span style={{ color: 'var(--text-3)', fontSize: 9 }}>{traffic.length.toLocaleString()} live vessels</span>
+              <span style={{ color: 'var(--text-3)', fontSize: 9 }}>{traffic.length.toLocaleString()} vessels shown</span>
             </div>
           )}
         </div>
@@ -953,7 +956,7 @@ export function RoutePlanning({ fleet, traffic }: RoutePlanningProps) {
               <div className="fleet-stats">
                 <div className="stat-card">
                   <div className="stat-value">{traffic.length.toLocaleString()}</div>
-                  <div className="stat-label">Live Vessels</div>
+                  <div className="stat-label">Vessels Shown</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-value">{traffic.filter((v: any) => v.conflict_risk).length}</div>

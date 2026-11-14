@@ -1,5 +1,22 @@
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001'
-export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || ''
+import type { StyleSpecification } from 'maplibre-gl'
+
+export const API_URL = import.meta.env.VITE_API_URL || '/api'
+
+export const MAP_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    land: {
+      type: 'geojson',
+      data: `${import.meta.env.BASE_URL}natural-earth-land.geojson`,
+      attribution: 'Made with Natural Earth',
+    },
+  },
+  layers: [
+    { id: 'ocean', type: 'background', paint: { 'background-color': '#0a1b2c' } },
+    { id: 'land', type: 'fill', source: 'land', paint: { 'fill-color': '#243549' } },
+    { id: 'coastline', type: 'line', source: 'land', paint: { 'line-color': '#4d677a', 'line-width': 1 } },
+  ],
+}
 
 // Framer Motion variants shared across components
 export const fadeUp = {

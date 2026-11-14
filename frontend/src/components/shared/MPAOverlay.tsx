@@ -1,4 +1,5 @@
-import { Source, Layer } from 'react-map-gl'
+import { Source, Layer } from 'react-map-gl/maplibre'
+import type { GeoJSONSourceSpecification } from 'maplibre-gl'
 import { MPA_DATA } from '../../constants'
 
 interface MPAOverlayProps {
@@ -6,7 +7,7 @@ interface MPAOverlayProps {
 }
 
 export function MPAOverlay({ data }: MPAOverlayProps) {
-  const src = (data && data.features?.length > 0 ? data : MPA_DATA) as Parameters<typeof Source>[0]['data']
+  const src = (data && data.features?.length > 0 ? data : MPA_DATA) as GeoJSONSourceSpecification['data']
   return (
     <Source id="mpa" type="geojson" data={src}>
       <Layer

@@ -38,7 +38,7 @@ export function MapLegend({ showPlume, trafficCount }: MapLegendProps) {
         <svg width="8" height="12" viewBox="0 0 14 20" fill="none" style={{ flexShrink: 0 }}>
           <path d="M7 1C4.8 1 3.5 3 3.5 5.5L3.5 15.5C3.5 17.5 5 19 7 19C9 19 10.5 17.5 10.5 15.5L10.5 5.5C10.5 3 9.2 1 7 1Z" fill="#f59e0b"/>
         </svg>
-        <span>Live AIS vessel</span>
+        <span>AIS vessel</span>
       </div>
       <div className="legend-row">
         <svg width="8" height="12" viewBox="0 0 14 20" fill="none" style={{ flexShrink: 0 }}>
@@ -61,7 +61,7 @@ export function MapLegend({ showPlume, trafficCount }: MapLegendProps) {
       {trafficCount ? (
         <div className="legend-row" style={{ marginTop: 2 }}>
           <span style={{ color: 'var(--text-3)', fontSize: 9 }}>
-            {trafficCount.toLocaleString()} vessels live
+            {trafficCount.toLocaleString()} vessels shown
           </span>
         </div>
       ) : null}

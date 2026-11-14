@@ -55,7 +55,7 @@ class NATSClient:
 
     @property
     def is_connected(self) -> bool:
-        return self._connected and self._nc is not None
+        return self._connected and self._nc is not None and self._nc.is_connected
 
     @property
     def jetstream(self):
@@ -76,8 +76,9 @@ class NATSClient:
         try:
             self._nc = await _nats_module.connect(
                 servers=[NATS_URL],
-                reconnect_time_wait=5,
-                max_reconnect_attempts=3,  # NATS is optional — stop retrying after 3 failures
+                connect_timeout=2,
+                reconnect_time_wait=2,
+                max_reconnect_attempts=1,  # Keep optional NATS startup bounded
                 error_cb=self._on_error,
                 disconnected_cb=self._on_disconnect,
                 reconnected_cb=self._on_reconnect,

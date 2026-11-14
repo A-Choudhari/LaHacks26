@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo } from 'react'
-import { Source, Layer, useMap } from 'react-map-gl'
+import { Source, Layer, useMap } from 'react-map-gl/maplibre'
 
 export interface AISVessel {
   vessel_id: string
@@ -34,12 +34,10 @@ const SHIP_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 20" wi
 const IMAGE_ID = 'ais-ship-sdf'
 
 function useShipImage() {
-  const maps = useMap()
+  const { current } = useMap()
 
   useEffect(() => {
-    const mapRef = Object.values(maps)[0]
-    if (!mapRef) return
-    const map = mapRef.getMap()
+    const map = current?.getMap()
     if (!map) return
 
     const load = () => {
@@ -56,7 +54,7 @@ function useShipImage() {
 
     if (map.isStyleLoaded()) load()
     else map.once('styledata', load)
-  }, [maps])
+  }, [current])
 }
 
 export function AISLayer({ vessels }: AISLayerProps) {
@@ -108,23 +106,6 @@ export function AISLayer({ vessels }: AISLayerProps) {
           ],
           'circle-stroke-width': 1,
           'circle-stroke-color': 'rgba(255,255,255,0.12)',
-        }}
-      />
-
-      {/* ── Cluster count label ── */}
-      <Layer
-        id="ais-cluster-count"
-        type="symbol"
-        filter={['has', 'point_count']}
-        layout={{
-          'text-field':  '{point_count_abbreviated}',
-          'text-font':   ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-          'text-size':   11,
-        }}
-        paint={{
-          'text-color':        '#0c0f14',
-          'text-halo-color':   'rgba(0,0,0,0.15)',
-          'text-halo-width':   1,
         }}
       />
 

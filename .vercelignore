@@ -1,0 +1,10 @@
+.git
+.claude
+backend/venv
+**/.env
+**/.env.local
+**/node_modules
+**/__pycache__
+frontend/dist
+data/real
+data/*.jsonl

@@ -20,6 +20,7 @@ import os
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -94,6 +95,24 @@ async def stream_forever() -> None:
 
     asyncio.create_task(_drain())
     logger.info(f"AIS worker PID {_proc.pid} started")
+
+async def stop_stream() -> None:
+    global _proc, _ais_publisher, _nats_publish_task
+    if _nats_publish_task:
+        _nats_publish_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _nats_publish_task
+        _nats_publish_task = None
+    if _ais_publisher:
+        await _ais_publisher.stop()
+        _ais_publisher = None
+    if _proc:
+        if _proc.returncode is None:
+            with suppress(ProcessLookupError):
+                _proc.terminate()
+        await _proc.wait()
+        _proc = None
+
 
 
 async def _nats_file_bridge() -> None:
